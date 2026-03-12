@@ -349,6 +349,113 @@ impl Tracker {
         Ok(())
     }
 
+    /// Return all tracking stats as a [`serde_json::Value`] for programmatic use.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database lock is poisoned or query fails.
+    pub fn stats_as_json(&self) -> Result<serde_json::Value> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
+
+        // Grand totals
+        let (total_calls, total_input, total_output, total_saved): (i64, i64, i64, i64) =
+            conn.query_row(
+                "SELECT COUNT(*), COALESCE(SUM(input_bytes),0), COALESCE(SUM(output_bytes),0), COALESCE(SUM(saved_bytes),0) FROM tool_calls",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )?;
+
+        let grand_pct = if total_input > 0 {
+            (total_saved as f64 / total_input as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        // Per-preset, per-tool breakdown
+        let mut stmt = conn.prepare(
+            "SELECT preset, tool_name, COUNT(*) as calls, SUM(input_bytes), SUM(output_bytes), SUM(saved_bytes), AVG(savings_pct)
+             FROM tool_calls GROUP BY preset, tool_name ORDER BY preset, SUM(saved_bytes) DESC",
+        )?;
+
+        let rows: Vec<(String, String, i64, i64, i64, i64, f64)> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Build JSON
+        let mut presets_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        for (preset, tool, calls, input, output, saved, avg_pct) in &rows {
+            let preset_entry = presets_map
+                .entry(preset.clone())
+                .or_insert_with(|| {
+                    serde_json::json!({"calls": 0, "input_bytes": 0, "output_bytes": 0, "saved_bytes": 0, "tools": {}})
+                });
+            let preset_obj = preset_entry.as_object_mut().unwrap();
+            *preset_obj.get_mut("calls").unwrap() =
+                serde_json::json!(preset_obj["calls"].as_i64().unwrap() + calls);
+            *preset_obj.get_mut("input_bytes").unwrap() =
+                serde_json::json!(preset_obj["input_bytes"].as_i64().unwrap() + input);
+            *preset_obj.get_mut("output_bytes").unwrap() =
+                serde_json::json!(preset_obj["output_bytes"].as_i64().unwrap() + output);
+            *preset_obj.get_mut("saved_bytes").unwrap() =
+                serde_json::json!(preset_obj["saved_bytes"].as_i64().unwrap() + saved);
+
+            let tools = preset_obj
+                .get_mut("tools")
+                .unwrap()
+                .as_object_mut()
+                .unwrap();
+            tools.insert(
+                tool.clone(),
+                serde_json::json!({
+                    "calls": calls,
+                    "input_bytes": input,
+                    "output_bytes": output,
+                    "saved_bytes": saved,
+                    "avg_savings_pct": (avg_pct * 10.0).round() / 10.0,
+                }),
+            );
+        }
+
+        let output = serde_json::json!({
+            "total_calls": total_calls,
+            "total_input_bytes": total_input,
+            "total_output_bytes": total_output,
+            "total_saved_bytes": total_saved,
+            "total_input_tokens": total_input / 4,
+            "total_output_tokens": total_output / 4,
+            "total_saved_tokens": total_saved / 4,
+            "savings_pct": (grand_pct * 10.0).round() / 10.0,
+            "presets": presets_map,
+        });
+
+        Ok(output)
+    }
+
+    /// Export all tracking stats as pretty-printed JSON to stdout.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database lock is poisoned or query fails.
+    pub fn export_json(&self) -> Result<()> {
+        let output = self.stats_as_json()?;
+        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        Ok(())
+    }
+
     /// Return the set of preset names that have tracking data.
     ///
     /// Used by `discover` to detect which servers are already proxied.

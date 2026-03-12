@@ -568,3 +568,166 @@ fn empty_input_no_crash() {
     assert_eq!(engine.filter("tool", "[]"), "[]");
     assert_eq!(engine.filter("tool", "null"), "null");
 }
+
+// ===========================================================================
+// GAIN --export json TESTS
+// ===========================================================================
+
+#[test]
+fn gain_export_json_format() {
+    let temp_dir = std::env::temp_dir().join("mcp-rtk-test-export");
+    let _ = std::fs::create_dir_all(&temp_dir);
+    let db_path = temp_dir.join("test-export.db");
+    let _ = std::fs::remove_file(&db_path);
+
+    let tracker = mcp_rtk::tracking::Tracker::new(db_path.to_str().unwrap()).unwrap();
+    tracker
+        .track("list_issues", &"x".repeat(1000), &"x".repeat(100), "gitlab")
+        .unwrap();
+    tracker
+        .track(
+            "get_merge_request",
+            &"x".repeat(2000),
+            &"x".repeat(500),
+            "gitlab",
+        )
+        .unwrap();
+    tracker
+        .track(
+            "search_dashboards",
+            &"x".repeat(500),
+            &"x".repeat(300),
+            "grafana",
+        )
+        .unwrap();
+
+    let parsed = tracker.stats_as_json().unwrap();
+
+    assert_eq!(parsed["total_calls"], 3);
+    assert!(parsed["total_saved_bytes"].as_i64().unwrap() > 0);
+    assert!(parsed["total_saved_tokens"].as_i64().unwrap() > 0);
+    assert!(parsed["savings_pct"].as_f64().unwrap() > 0.0);
+    assert!(parsed["presets"]["gitlab"]["tools"]["list_issues"].is_object());
+    assert!(parsed["presets"]["grafana"]["tools"]["search_dashboards"].is_object());
+
+    // Verify it round-trips through JSON serialization
+    let json_str = serde_json::to_string_pretty(&parsed).unwrap();
+    let reparsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(reparsed["total_calls"], 3);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+// ===========================================================================
+// VALIDATE-PRESET TESTS
+// ===========================================================================
+
+#[test]
+fn validate_preset_valid_file() {
+    // Write a valid preset to a temp file and validate it
+    let temp_dir = std::env::temp_dir().join("mcp-rtk-test-validate");
+    let _ = std::fs::create_dir_all(&temp_dir);
+    let path = temp_dir.join("test-preset.toml");
+
+    std::fs::write(
+        &path,
+        r#"
+[tools.list_items]
+keep_fields = ["id", "name", "status"]
+max_array_items = 20
+condense_users = true
+
+[tools.get_item]
+truncate_strings_at = 500
+strip_fields = ["internal_id"]
+"#,
+    )
+    .unwrap();
+
+    let result = mcp_rtk::config::validate_preset_file(&path);
+    assert!(result.is_ok());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn validate_preset_invalid_toml() {
+    let temp_dir = std::env::temp_dir().join("mcp-rtk-test-validate-invalid");
+    let _ = std::fs::create_dir_all(&temp_dir);
+    let path = temp_dir.join("bad.toml");
+
+    std::fs::write(&path, "this is not valid toml {{{{").unwrap();
+
+    let result = mcp_rtk::config::validate_preset_file(&path);
+    assert!(result.is_err());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+// ===========================================================================
+// PRESETS SUBCOMMAND TESTS
+// ===========================================================================
+
+#[test]
+fn presets_list_includes_gitlab_and_grafana() {
+    let presets = mcp_rtk::config::Config::available_presets();
+    assert!(presets.contains(&"gitlab"));
+    assert!(presets.contains(&"grafana"));
+}
+
+#[test]
+fn show_preset_unknown_fails() {
+    let result = mcp_rtk::config::show_preset("nonexistent");
+    assert!(result.is_err());
+}
+
+#[test]
+fn show_preset_gitlab_succeeds() {
+    let result = mcp_rtk::config::show_preset("gitlab");
+    assert!(result.is_ok());
+}
+
+// ===========================================================================
+// DRY-RUN TESTS
+// ===========================================================================
+
+#[test]
+fn dry_run_filters_json() {
+    use mcp_rtk::config::Config;
+    use mcp_rtk::filter::FilterEngine;
+    use std::sync::Arc;
+
+    // Simulate dry-run by creating a config with gitlab preset and filtering
+    let config = Config::from_upstream(&["npx", "@nicepkg/gitlab-mcp"], None).unwrap();
+    let engine = FilterEngine::new(Arc::new(config));
+
+    let input = json!([{
+        "id": 5000, "iid": 10,
+        "title": "Test issue",
+        "state": "opened",
+        "author": {"id": 1, "username": "thomas", "name": "Thomas", "avatar_url": "http://..."},
+        "labels": ["bug"],
+        "assignees": [],
+        "created_at": "2024-01-01",
+        "web_url": "https://gitlab.com/issues/10",
+        "_links": {},
+        "time_stats": {},
+        "description": "x".repeat(2000),
+        "project_id": 123,
+        "extra_field": true
+    }]);
+
+    let filtered = engine.filter("list_issues", &input.to_string());
+    let parsed: Value = serde_json::from_str(&filtered).unwrap();
+
+    // Fields kept
+    assert_eq!(parsed[0]["iid"], 10);
+    assert_eq!(parsed[0]["title"], "Test issue");
+    assert_eq!(parsed[0]["author"], "thomas");
+
+    // Fields removed
+    assert!(parsed[0].get("id").is_none());
+    assert!(parsed[0].get("description").is_none());
+    assert!(parsed[0].get("_links").is_none());
+    assert!(parsed[0].get("project_id").is_none());
+}

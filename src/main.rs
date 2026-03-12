@@ -53,12 +53,48 @@ enum Commands {
         /// Show recent call history instead of the summary.
         #[arg(long)]
         history: bool,
+        /// Export stats in the given format (for scripting). Supported: json
+        #[arg(long)]
+        export: Option<String>,
     },
     /// Analyze Claude Code history for MCP servers that would benefit from mcp-rtk.
     Discover {
         /// Number of days to look back (default: 30).
         #[arg(long, default_value = "30")]
         days: u32,
+    },
+    /// Validate a preset or config TOML file.
+    ValidatePreset {
+        /// Path to the TOML file to validate.
+        file: String,
+    },
+    /// Test filters on stdin JSON without running a proxy.
+    DryRun {
+        /// Preset to use.
+        #[arg(long)]
+        preset: Option<String>,
+        /// Path to config file.
+        #[arg(short, long)]
+        config: Option<String>,
+        /// Tool name to simulate (determines which filter rules apply).
+        #[arg(long)]
+        tool: String,
+    },
+    /// Browse available filter presets.
+    Presets {
+        #[command(subcommand)]
+        action: PresetsAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum PresetsAction {
+    /// List all available presets.
+    List,
+    /// Show the full TOML content of a preset.
+    Show {
+        /// Preset name (e.g. "gitlab", "grafana").
+        name: String,
     },
 }
 
@@ -73,10 +109,15 @@ async fn main() -> Result<()> {
 
     // Handle subcommands
     match &cli.command {
-        Some(Commands::Gain { history }) => {
+        Some(Commands::Gain { history, export }) => {
             let config = Config::load_for_gain(cli.config.as_deref().map(std::path::Path::new))?;
             let tracker = Tracker::new(&config.tracking.db_path)?;
-            if *history {
+            if let Some(format) = export {
+                match format.as_str() {
+                    "json" => tracker.export_json()?,
+                    _ => anyhow::bail!("Unknown export format: {format}. Supported: json"),
+                }
+            } else if *history {
                 tracker.print_history()?;
             } else {
                 tracker.print_stats()?;
@@ -85,6 +126,106 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Discover { days }) => {
             mcp_rtk::discover::run_discover(*days)?;
+            return Ok(());
+        }
+        Some(Commands::ValidatePreset { file }) => {
+            mcp_rtk::config::validate_preset_file(std::path::Path::new(file))?;
+            return Ok(());
+        }
+        Some(Commands::DryRun {
+            preset,
+            config: dry_config,
+            tool,
+        }) => {
+            use mcp_rtk::display::*;
+            use mcp_rtk::filter::FilterEngine;
+            use std::io::Read;
+
+            // Build config: if preset specified, use a fake upstream with that preset keyword
+            // If config specified, load from file
+            let config_path = dry_config.as_deref().map(std::path::Path::new);
+            let fake_upstream: Vec<&str> = if let Some(ref p) = preset {
+                vec!["dry-run", p] // preset keyword will be detected from args
+            } else {
+                vec!["dry-run"]
+            };
+
+            let mut config = Config::from_upstream(&fake_upstream, config_path)?;
+
+            // Override preset if explicitly specified (in case auto-detect didn't work)
+            if let Some(ref preset_name) = preset {
+                if config.preset.is_none() {
+                    if let Some(preset_rules) = Config::load_preset_by_name(preset_name) {
+                        for (k, v) in preset_rules {
+                            config.filters.tools.insert(k, v);
+                        }
+                        config.preset = Some(preset_name.clone());
+                    } else {
+                        anyhow::bail!(
+                            "Unknown preset: {preset_name}\nAvailable: {}",
+                            Config::available_presets().join(", ")
+                        );
+                    }
+                }
+            }
+
+            let engine = FilterEngine::new(Arc::new(config));
+
+            let mut input = String::new();
+            std::io::stdin()
+                .read_to_string(&mut input)
+                .context("Failed to read from stdin")?;
+
+            let input = input.trim();
+            if input.is_empty() {
+                anyhow::bail!("No input received on stdin. Pipe JSON into the command:\n  echo '{{\"key\": \"value\"}}' | mcp-rtk dry-run --tool <name>");
+            }
+
+            let filtered = engine.filter(tool, input);
+
+            // Print stats to stderr so stdout is clean JSON
+            let input_bytes = input.len();
+            let output_bytes = filtered.len();
+            let saved = input_bytes.saturating_sub(output_bytes);
+            let pct = if input_bytes > 0 {
+                (saved as f64 / input_bytes as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            let pct_color = pct_to_color(pct);
+            eprintln!();
+            eprintln!("  {DIM}Tool:{RESET}    {BOLD}{tool}{RESET}");
+            if let Some(ref p) = preset {
+                eprintln!("  {DIM}Preset:{RESET}  {BOLD}{p}{RESET}");
+            }
+            eprintln!(
+                "  {DIM}Input:{RESET}   {} bytes (~{} tokens)",
+                input_bytes,
+                input_bytes / 4
+            );
+            eprintln!(
+                "  {DIM}Output:{RESET}  {} bytes (~{} tokens)",
+                output_bytes,
+                output_bytes / 4
+            );
+            eprintln!("  {DIM}Saved:{RESET}   {pct_color}{BOLD}{saved} bytes ({pct:.1}%){RESET}");
+            eprintln!();
+
+            // Pretty-print if valid JSON, otherwise raw
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&filtered) {
+                println!("{}", serde_json::to_string_pretty(&parsed).unwrap());
+            } else {
+                println!("{filtered}");
+            }
+
+            return Ok(());
+        }
+        Some(Commands::Presets { action }) => {
+            match action {
+                PresetsAction::List => mcp_rtk::config::list_presets(),
+                PresetsAction::Show { name } => mcp_rtk::config::show_preset(name)?,
+            }
             return Ok(());
         }
         None => {}
