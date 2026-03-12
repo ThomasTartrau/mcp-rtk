@@ -2,7 +2,7 @@
 name = "mcp-rtk"
 version = "1.0.0"
 edition = "2021"
-description = "Token-optimizing MCP proxy — sits between Claude and upstream MCP servers, compressing tool responses by 60-90%"
+description = "Token-optimizing MCP proxy - sits between Claude and upstream MCP servers, compressing tool responses by 60-90%"
 license = "MIT"
 repository = "https://gitlab.com/thomastartrau/mcp-rtk"
 keywords = ["mcp", "proxy", "token", "claude", "llm"]

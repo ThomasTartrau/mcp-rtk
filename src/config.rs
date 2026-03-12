@@ -155,24 +155,58 @@ fn default_db_path() -> String {
 
 /// Preset filter rules (no upstream section — just `[tools.*]`).
 #[derive(Debug, Clone, Deserialize)]
-struct PresetConfig {
+pub(crate) struct PresetConfig {
     #[serde(default)]
-    tools: HashMap<String, ToolFilterRules>,
+    pub(crate) tools: HashMap<String, ToolFilterRules>,
 }
 
 /// User-supplied configuration file. All sections are optional.
 #[derive(Debug, Clone, Deserialize)]
-struct UserConfig {
+pub(crate) struct UserConfig {
     /// Optional upstream override (env vars from config are merged).
     #[serde(default)]
     pub upstream: Option<UpstreamConfig>,
     #[serde(default)]
-    filters: Option<FilterConfig>,
+    pub(crate) filters: Option<FilterConfig>,
     #[serde(default)]
     tracking: Option<TrackingConfig>,
     /// Explicitly select a preset (overrides auto-detection).
     #[serde(default)]
     preset: Option<String>,
+}
+
+/// Simple glob matching: `*` matches any sequence of characters, `?` matches
+/// exactly one character. No other special syntax is supported.
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let t: Vec<char> = text.chars().collect();
+    let mut pi = 0;
+    let mut ti = 0;
+    let mut star_pi = usize::MAX;
+    let mut star_ti = 0;
+
+    while ti < t.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == t[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star_pi = pi;
+            star_ti = ti;
+            pi += 1;
+        } else if star_pi != usize::MAX {
+            pi = star_pi + 1;
+            star_ti += 1;
+            ti = star_ti;
+        } else {
+            return false;
+        }
+    }
+
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+
+    pi == p.len()
 }
 
 impl Config {
@@ -358,16 +392,94 @@ impl Config {
     /// Tool-specific rules override the defaults. Lists (`strip_fields`,
     /// `custom_transforms`) are concatenated; scalars use the tool value
     /// if present, otherwise the default.
+    ///
+    /// Lookup order:
+    /// 1. Exact match by tool name (fast path).
+    /// 2. Glob pattern match — keys containing `*` or `?` are tested against
+    ///    the tool name using [`glob_match`].
     pub fn get_tool_rules(&self, tool_name: &str) -> MergedRules {
         let defaults = &self.filters.default;
-        let tool_specific = self.filters.tools.get(tool_name);
-        MergedRules::merge(defaults, tool_specific)
+
+        // Exact match first
+        if let Some(specific) = self.filters.tools.get(tool_name) {
+            return MergedRules::merge(defaults, Some(specific));
+        }
+
+        // Glob pattern match
+        for (pattern, rules) in &self.filters.tools {
+            if (pattern.contains('*') || pattern.contains('?')) && glob_match(pattern, tool_name) {
+                return MergedRules::merge(defaults, Some(rules));
+            }
+        }
+
+        MergedRules::merge(defaults, None)
     }
 
     /// List all available preset names.
     pub fn available_presets() -> Vec<&'static str> {
         PRESETS.iter().map(|(name, _, _)| *name).collect()
     }
+}
+
+/// Print a table of all available presets.
+pub fn list_presets() {
+    use crate::display::*;
+
+    println!();
+    println!("  {BOLD}{GREEN}MCP-RTK{RESET}{DIM} — Available Presets{RESET}");
+    println!("  {DIM}{}{RESET}", "─".repeat(56));
+    println!();
+
+    for (name, keywords, toml_content) in PRESETS {
+        let tool_count = toml_content.matches("[tools.").count();
+        println!(
+            "  {BOLD}{WHITE}{:<12}{RESET}  {DIM}detected from:{RESET} {YELLOW}{}{RESET}  {DIM}({} tools){RESET}",
+            name,
+            keywords.join(", "),
+            tool_count,
+        );
+    }
+
+    println!();
+    println!("  {DIM}Use `mcp-rtk presets show <name>` to see the full TOML.{RESET}");
+    println!();
+}
+
+/// Print the full TOML content of a named preset.
+pub fn show_preset(name: &str) -> Result<()> {
+    use crate::display::*;
+
+    for (preset_name, keywords, toml_content) in PRESETS {
+        if *preset_name == name {
+            println!();
+            println!("  {BOLD}{GREEN}{}{RESET}{DIM} preset{RESET}", name);
+            println!("  {DIM}Auto-detected from: {}{RESET}", keywords.join(", "));
+            println!();
+            // Print TOML content with light syntax highlighting
+            for line in toml_content.lines() {
+                if line.starts_with('#') {
+                    println!("  {DIM}{line}{RESET}");
+                } else if line.starts_with("[tools.") {
+                    println!("  {BOLD}{CYAN}{line}{RESET}");
+                } else if line.is_empty() {
+                    println!();
+                } else {
+                    println!("  {line}");
+                }
+            }
+            println!();
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!(
+        "Unknown preset: {name}\nAvailable: {}",
+        PRESETS
+            .iter()
+            .map(|(n, _, _)| *n)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 /// Merge two sets of tool filter rules (user on top of base).
@@ -457,6 +569,133 @@ impl MergedRules {
     }
 }
 
+/// Validate a preset or user config TOML file and print a diagnostic report.
+///
+/// Parses the file as either a preset (`[tools.*]` format) or a full user
+/// config (`[filters.*]` format). Reports the tools defined, active rules
+/// per tool, and any warnings (conflicting options, invalid regex, etc.).
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or is not valid TOML for
+/// either format.
+pub fn validate_preset_file(path: &Path) -> Result<()> {
+    use crate::display::*;
+
+    let content = std::fs::read_to_string(path)
+        .context(format!("Failed to read file: {}", path.display()))?;
+
+    // Try parsing as a preset (tools.* format)
+    let preset_result = toml::from_str::<PresetConfig>(&content);
+    // Try parsing as a full user config (filters.* format)
+    let user_result = toml::from_str::<UserConfig>(&content);
+
+    let (tools, is_preset) = match (preset_result, user_result) {
+        (Ok(preset), _) => (preset.tools, true),
+        (_, Ok(user)) => {
+            let filters = user.filters.unwrap_or_default();
+            (filters.tools, false)
+        }
+        (Err(e1), Err(_)) => {
+            anyhow::bail!("Failed to parse TOML:\n{e1}");
+        }
+    };
+
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+
+    println!();
+    println!(
+        "  {BOLD}{GREEN}✓{RESET} {BOLD}{file_name}{RESET} is valid {}",
+        if is_preset { "preset" } else { "config" }
+    );
+    println!();
+
+    // Stats
+    println!("  {DIM}Tools defined:{RESET}  {BOLD}{}{RESET}", tools.len());
+
+    // List tools with their active rules
+    if !tools.is_empty() {
+        println!();
+        println!("  {DIM}Tool rules:{RESET}");
+        for (name, rules) in &tools {
+            let mut active = Vec::new();
+            if !rules.keep_fields.is_empty() {
+                active.push(format!("keep:{}", rules.keep_fields.len()));
+            }
+            if !rules.strip_fields.is_empty() {
+                active.push(format!("strip:{}", rules.strip_fields.len()));
+            }
+            if rules.condense_users == Some(true) {
+                active.push("condense_users".into());
+            }
+            if let Some(n) = rules.truncate_strings_at {
+                active.push(format!("truncate:{n}"));
+            }
+            if let Some(n) = rules.max_array_items {
+                active.push(format!("max_items:{n}"));
+            }
+            if rules.strip_nulls == Some(true) {
+                active.push("strip_nulls".into());
+            }
+            if rules.flatten == Some(true) {
+                active.push("flatten".into());
+            }
+            if !rules.custom_transforms.is_empty() {
+                active.push(format!("transforms:{}", rules.custom_transforms.len()));
+            }
+
+            println!(
+                "    {BOLD}{WHITE}{:<32}{RESET} {DIM}{}{RESET}",
+                name,
+                active.join(", ")
+            );
+        }
+    }
+
+    // Warnings
+    let mut warnings = Vec::new();
+    for (name, rules) in &tools {
+        if !rules.keep_fields.is_empty() && !rules.strip_fields.is_empty() {
+            warnings.push(format!(
+                "{name}: has both keep_fields and strip_fields (keep_fields takes priority, strip_fields may be redundant)"
+            ));
+        }
+        if rules.truncate_strings_at == Some(0) {
+            warnings.push(format!(
+                "{name}: truncate_strings_at is 0 (all strings will be empty)"
+            ));
+        }
+        if rules.max_array_items == Some(0) {
+            warnings.push(format!(
+                "{name}: max_array_items is 0 (all arrays will be empty)"
+            ));
+        }
+    }
+
+    // Validate custom_transforms regex patterns
+    for (name, rules) in &tools {
+        for (i, transform) in rules.custom_transforms.iter().enumerate() {
+            if regex::Regex::new(&transform.pattern).is_err() {
+                warnings.push(format!(
+                    "{name}: custom_transform[{i}] has invalid regex: {}",
+                    transform.pattern
+                ));
+            }
+        }
+    }
+
+    if !warnings.is_empty() {
+        println!();
+        println!("  {YELLOW}Warnings:{RESET}");
+        for w in &warnings {
+            println!("    {YELLOW}⚠{RESET}  {w}");
+        }
+    }
+
+    println!();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -533,5 +772,66 @@ mod tests {
         // From defaults
         assert!(rules.strip_nulls);
         assert!(rules.strip_fields.contains(&"avatar_url".to_string()));
+    }
+
+    #[test]
+    fn glob_match_star() {
+        assert!(glob_match("list_*", "list_issues"));
+        assert!(glob_match("list_*", "list_merge_requests"));
+        assert!(!glob_match("list_*", "get_issue"));
+        assert!(glob_match("*_requests", "list_merge_requests"));
+        assert!(glob_match("*", "anything"));
+    }
+
+    #[test]
+    fn glob_match_question() {
+        assert!(glob_match("get_issue?", "get_issues"));
+        assert!(!glob_match("get_issue?", "get_issue"));
+        assert!(glob_match("get_?ssue", "get_issue"));
+    }
+
+    #[test]
+    fn glob_match_exact() {
+        assert!(glob_match("list_issues", "list_issues"));
+        assert!(!glob_match("list_issues", "list_merge_requests"));
+    }
+
+    #[test]
+    fn get_tool_rules_glob_pattern() {
+        let mut config = Config::from_upstream(&["echo", "test-server"], None).unwrap();
+        config.filters.tools.insert(
+            "list_*".to_string(),
+            ToolFilterRules {
+                keep_fields: vec!["id".to_string(), "name".to_string()],
+                max_array_items: Some(5),
+                ..Default::default()
+            },
+        );
+
+        let rules = config.get_tool_rules("list_something");
+        assert_eq!(rules.keep_fields, vec!["id", "name"]);
+        assert_eq!(rules.max_array_items, 5);
+    }
+
+    #[test]
+    fn get_tool_rules_exact_match_takes_priority_over_glob() {
+        let mut config = Config::from_upstream(&["echo", "test-server"], None).unwrap();
+        config.filters.tools.insert(
+            "list_*".to_string(),
+            ToolFilterRules {
+                keep_fields: vec!["id".to_string(), "name".to_string()],
+                ..Default::default()
+            },
+        );
+        config.filters.tools.insert(
+            "list_special".to_string(),
+            ToolFilterRules {
+                keep_fields: vec!["special_field".to_string()],
+                ..Default::default()
+            },
+        );
+
+        let rules = config.get_tool_rules("list_special");
+        assert_eq!(rules.keep_fields, vec!["special_field"]);
     }
 }
