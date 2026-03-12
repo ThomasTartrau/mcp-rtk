@@ -1,0 +1,66 @@
+# Grafana MCP preset — auto-detected when upstream command contains "grafana".
+#
+# Filters for Grafana MCP tools (search, datasource, prometheus, loki, dashboard).
+# These rules are merged on top of the generic defaults.
+
+# --- Search ---
+
+[tools.search_dashboards]
+keep_fields = ["uid", "title", "tags", "type", "url", "folderTitle", "folderUid"]
+max_array_items = 30
+strip_nulls = true
+
+[tools.search_folders]
+keep_fields = ["uid", "title", "tags", "type", "url"]
+max_array_items = 30
+
+# --- Datasources ---
+
+[tools.list_datasources]
+keep_fields = ["uid", "name", "type", "isDefault"]
+max_array_items = 30
+
+[tools.get_datasource_by_uid]
+keep_fields = ["uid", "name", "type", "url", "isDefault"]
+strip_fields = ["secureJsonFields", "typeLogoUrl", "jsonData", "access", "orgId", "version"]
+
+[tools.get_datasource_by_name]
+keep_fields = ["uid", "name", "type", "url", "isDefault"]
+strip_fields = ["secureJsonFields", "typeLogoUrl", "jsonData", "access", "orgId", "version"]
+
+# --- Dashboards ---
+
+[tools.get_dashboard_by_uid]
+strip_fields = ["meta", "annotations", "id", "version", "schemaVersion", "graphTooltip", "fiscalYearStartMonth", "liveNow", "weekStart", "iteration"]
+truncate_strings_at = 2000
+max_array_items = 50
+
+[tools.get_dashboard_summary]
+strip_fields = ["meta"]
+max_array_items = 50
+
+[tools.get_dashboard_panel_queries]
+max_array_items = 30
+truncate_strings_at = 1500
+
+# --- Prometheus ---
+
+[tools.query_prometheus]
+strip_fields = ["__replica__"]
+max_array_items = 50
+
+[tools.list_prometheus_metric_names]
+max_array_items = 100
+
+[tools.list_prometheus_label_names]
+max_array_items = 100
+
+[tools.list_prometheus_label_values]
+max_array_items = 100
+
+# --- Loki ---
+
+[tools.query_loki_logs]
+strip_fields = ["filename"]
+truncate_strings_at = 1500
+max_array_items = 50

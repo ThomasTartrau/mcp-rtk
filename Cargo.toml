@@ -1,0 +1,30 @@
+[package]
+name = "mcp-rtk"
+version = "0.1.0"
+edition = "2021"
+description = "Token-optimizing MCP proxy — sits between Claude and upstream MCP servers, compressing tool responses by 60-90%"
+license = "MIT"
+repository = "https://gitlab.com/thomastartrau/mcp-rtk"
+keywords = ["mcp", "proxy", "token", "claude", "llm"]
+categories = ["command-line-utilities"]
+exclude = [".cargo/", ".gitlab-ci.yml", ".releaserc.json"]
+
+[dependencies]
+rmcp = { version = "0.1", features = ["client", "server", "transport-io", "transport-child-process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+rusqlite = { version = "0.31", features = ["bundled"] }
+anyhow = "1"
+regex = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1

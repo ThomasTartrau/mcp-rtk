@@ -1,0 +1,212 @@
+# GitLab MCP preset — auto-detected when upstream command contains "gitlab".
+#
+# Contributed filters for all GitLab MCP read tools.
+# These rules are merged on top of the generic defaults.
+
+# --- Merge Requests ---
+
+[tools.list_merge_requests]
+keep_fields = ["iid", "title", "state", "author", "source_branch", "target_branch", "web_url", "created_at", "updated_at"]
+max_array_items = 20
+condense_users = true
+
+[tools.get_merge_request]
+keep_fields = ["iid", "title", "state", "author", "source_branch", "target_branch", "web_url", "description", "labels", "assignees", "reviewers", "created_at", "updated_at", "merge_status"]
+truncate_strings_at = 500
+condense_users = true
+
+[tools.list_merge_request_notes]
+keep_fields = ["author", "body", "created_at", "system", "type"]
+truncate_strings_at = 800
+condense_users = true
+max_array_items = 30
+
+[tools.get_merge_request_diffs]
+keep_fields = ["old_path", "new_path", "diff", "new_file", "renamed_file", "deleted_file"]
+truncate_strings_at = 2000
+max_array_items = 50
+
+[tools.list_merge_request_diffs]
+keep_fields = ["old_path", "new_path", "diff", "new_file", "deleted_file", "renamed_file"]
+truncate_strings_at = 2000
+max_array_items = 50
+
+[tools.get_merge_request_note]
+keep_fields = ["id", "body", "author", "created_at", "system", "type", "resolved", "position"]
+condense_users = true
+truncate_strings_at = 800
+
+[tools.get_merge_request_notes]
+keep_fields = ["id", "body", "author", "created_at", "system", "type", "resolved"]
+condense_users = true
+truncate_strings_at = 800
+max_array_items = 30
+
+[tools.mr_discussions]
+keep_fields = ["items", "id", "individual_note", "notes", "body", "author", "created_at", "system", "resolved", "type"]
+condense_users = true
+truncate_strings_at = 800
+max_array_items = 30
+strip_fields = ["pagination", "noteable_id", "noteable_type", "project_id", "noteable_iid", "confidential", "internal", "imported", "imported_from", "commands_changes", "attachment", "resolvable"]
+
+# --- Pipelines & Jobs ---
+
+[tools.list_pipelines]
+keep_fields = ["id", "status", "ref", "sha", "created_at", "source", "web_url"]
+max_array_items = 15
+
+[tools.get_pipeline]
+keep_fields = ["id", "status", "ref", "sha", "created_at", "updated_at", "source", "web_url", "duration", "finished_at"]
+
+[tools.list_project_jobs]
+keep_fields = ["id", "name", "status", "stage", "ref", "created_at", "duration", "web_url"]
+max_array_items = 20
+
+[tools.get_job_log]
+truncate_strings_at = 3000
+
+# --- Issues ---
+
+[tools.list_issues]
+keep_fields = ["iid", "title", "state", "author", "labels", "assignees", "created_at", "updated_at", "web_url"]
+max_array_items = 20
+condense_users = true
+
+[tools.get_issue]
+keep_fields = ["iid", "title", "state", "author", "description", "labels", "assignees", "milestone", "created_at", "updated_at", "web_url"]
+truncate_strings_at = 500
+condense_users = true
+
+[tools.my_issues]
+keep_fields = ["iid", "title", "state", "author", "labels", "assignees", "project_id", "created_at", "web_url"]
+condense_users = true
+max_array_items = 20
+
+[tools.list_issue_discussions]
+keep_fields = ["items", "id", "individual_note", "notes", "body", "author", "created_at", "system", "resolved", "type"]
+condense_users = true
+truncate_strings_at = 800
+max_array_items = 30
+strip_fields = ["pagination", "noteable_id", "noteable_type", "project_id", "noteable_iid", "confidential", "internal", "imported", "imported_from", "commands_changes", "attachment", "resolvable"]
+
+[tools.list_issue_links]
+keep_fields = ["iid", "title", "state", "web_url"]
+max_array_items = 20
+
+[tools.get_issue_link]
+keep_fields = ["iid", "title", "state", "web_url"]
+
+# --- Commits ---
+
+[tools.list_commits]
+keep_fields = ["short_id", "title", "author_name", "authored_date", "web_url"]
+max_array_items = 30
+
+[tools.get_commit]
+keep_fields = ["short_id", "title", "message", "author_name", "authored_date", "web_url", "parent_ids", "stats"]
+truncate_strings_at = 1000
+
+[tools.get_commit_diff]
+keep_fields = ["old_path", "new_path", "diff", "new_file", "deleted_file", "renamed_file"]
+truncate_strings_at = 2000
+max_array_items = 50
+
+# --- Files & Tree ---
+
+[tools.get_file_contents]
+keep_fields = ["file_name", "file_path", "size", "content", "ref", "name", "path", "type"]
+truncate_strings_at = 5000
+
+[tools.get_repository_tree]
+keep_fields = ["name", "type", "path"]
+max_array_items = 100
+
+[tools.search_project]
+keep_fields = ["path", "content", "ref", "startline"]
+truncate_strings_at = 1000
+max_array_items = 20
+
+# --- Projects ---
+
+[tools.get_project]
+keep_fields = ["id", "name", "path_with_namespace", "visibility", "web_url", "description", "default_branch", "namespace", "created_at", "last_activity_at"]
+truncate_strings_at = 500
+
+[tools.list_projects]
+keep_fields = ["id", "name", "path_with_namespace", "visibility", "web_url", "default_branch"]
+max_array_items = 20
+
+[tools.list_group_projects]
+keep_fields = ["id", "name", "path_with_namespace", "visibility", "web_url", "default_branch"]
+max_array_items = 20
+
+[tools.search_repositories]
+keep_fields = ["count", "items", "id", "name", "path_with_namespace", "visibility", "web_url", "default_branch"]
+max_array_items = 20
+strip_fields = ["pagination", "total_pages", "current_page"]
+
+# --- Members & Users ---
+
+[tools.list_project_members]
+keep_fields = ["username", "name", "access_level", "access_level_description"]
+max_array_items = 30
+
+[tools.get_users]
+keep_fields = ["id", "username", "name", "web_url"]
+
+# --- Labels ---
+
+[tools.list_labels]
+keep_fields = ["id", "name", "color", "description"]
+max_array_items = 50
+
+[tools.get_label]
+keep_fields = ["id", "name", "color", "description", "open_issues_count", "open_merge_requests_count"]
+
+# --- Releases ---
+
+[tools.list_releases]
+keep_fields = ["tag_name", "name", "created_at", "released_at", "author"]
+condense_users = true
+max_array_items = 10
+
+[tools.get_release]
+keep_fields = ["tag_name", "name", "description", "created_at", "released_at", "author", "assets"]
+condense_users = true
+truncate_strings_at = 500
+
+# --- Events ---
+
+[tools.list_events]
+keep_fields = ["action_name", "target_type", "target_title", "created_at", "author"]
+condense_users = true
+max_array_items = 20
+
+[tools.get_project_events]
+keep_fields = ["action_name", "target_type", "target_title", "created_at", "author"]
+condense_users = true
+max_array_items = 20
+
+# --- Misc ---
+
+[tools.get_branch_diffs]
+keep_fields = ["old_path", "new_path", "diff", "new_file", "deleted_file", "renamed_file"]
+truncate_strings_at = 2000
+max_array_items = 50
+
+[tools.list_group_iterations]
+keep_fields = ["id", "title", "state", "start_date", "due_date"]
+max_array_items = 10
+
+[tools.get_namespace]
+keep_fields = ["id", "name", "path", "kind", "full_path", "web_url"]
+
+[tools.list_namespaces]
+keep_fields = ["id", "name", "path", "kind", "full_path"]
+max_array_items = 20
+
+[tools.list_draft_notes]
+keep_fields = ["id", "body", "author", "created_at"]
+condense_users = true
+truncate_strings_at = 800
+max_array_items = 20

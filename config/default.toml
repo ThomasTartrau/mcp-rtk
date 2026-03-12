@@ -1,0 +1,10 @@
+# Generic default filter rules applied to ALL MCP servers.
+# These are sensible defaults that reduce token usage without losing context.
+
+[default]
+strip_nulls = true
+condense_users = true
+truncate_strings_at = 1000
+max_array_items = 30
+strip_fields = ["avatar_url", "_links", "time_stats", "task_completion_status", "references", "task_status"]
+flatten = true
