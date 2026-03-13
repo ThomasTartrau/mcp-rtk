@@ -1,3 +1,9 @@
+## [1.4.0](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.3.0...v1.4.0) (2026-03-13)
+
+### Features
+
+* external preset auto-discovery and hot reload ([63b00d4](https://gitlab.com/ThomasTartrau/mcp-rtk/commit/63b00d4cf8341fdfa945b5f1f0d706f5b6140920))
+
 ## [1.3.0](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.2.0...v1.3.0) (2026-03-13)
 
 ### Features
