@@ -61,12 +61,65 @@ benchmark-tests:
   needs:
     - cargo-check
 
+proptest:
+  stage: test
+  script:
+    - cargo test --test proptest_filter
+  needs:
+    - cargo-check
+
 doc-tests:
   stage: test
   script:
     - cargo test --doc
   needs:
     - cargo-check
+
+# ── Benchmark stage (bencher.dev perf regression tracking) ─
+
+bench-main:
+  stage: test
+  image: rust:1.94.0
+  before_script:
+    - curl --proto '=https' --tlsv1.2 -sSfL https://bencher.dev/download/install-cli.sh | sh
+  script:
+    - |
+      bencher run \
+      --project mcp-rtk \
+      --token "$BENCHER_API_TOKEN" \
+      --branch main \
+      --testbed ci \
+      --adapter rust_criterion \
+      --err \
+      cargo bench --bench filter_perf
+  needs:
+    - cargo-check
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+bench-mr:
+  stage: test
+  image: rust:1.94.0
+  before_script:
+    - curl --proto '=https' --tlsv1.2 -sSfL https://bencher.dev/download/install-cli.sh | sh
+  script:
+    - |
+      bencher run \
+      --project mcp-rtk \
+      --token "$BENCHER_API_TOKEN" \
+      --branch "$CI_COMMIT_REF_NAME" \
+      --start-point "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" \
+      --start-point-hash "$CI_MERGE_REQUEST_TARGET_BRANCH_SHA" \
+      --start-point-clone-thresholds \
+      --start-point-reset \
+      --testbed ci \
+      --adapter rust_criterion \
+      --err \
+      cargo bench --bench filter_perf
+  needs:
+    - cargo-check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # ── Build stage ─────────────────────────────────────────
 

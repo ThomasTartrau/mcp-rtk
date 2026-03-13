@@ -1,0 +1,172 @@
+{
+  "id": 380142,
+  "iid": 101,
+  "project_id": 99999,
+  "title": "fix: resolve N+1 query in approval check",
+  "description": "## What does this MR do?\n\nFixes an N+1 query that occurs when checking approvals. The query was executing once per rule instead of being batched.\n\n### Database Analysis\n\nBefore: 47 queries per page load\nAfter: 3 queries per page load\n\n```sql\n-- Before (executed N times)\nSELECT * FROM approval_rules WHERE merge_request_id = $1;\nSELECT * FROM approvals WHERE approval_rule_id = $1;\n\n-- After (batched)\nSELECT * FROM approval_rules WHERE merge_request_id = ANY($1);\nSELECT * FROM approvals WHERE approval_rule_id = ANY($1);\n```\n\n### Performance Results\n\n| Metric | Before | After | Improvement |\n|--------|--------|-------|-------------|\n| Queries | 47 | 3 | -93.6% |\n| Load time | 2.3s | 0.4s | -82.6% |\n| Memory | 145MB | 12MB | -91.7% |\n\n### Checklist\n\n- [x] Tests added for N+1 fix\n- [x] Database migration reviewed\n- [x] Performance benchmarks run\n- [ ] Feature flag rollout plan\n- [x] Changelog entry added\n\nCloses #500\nRelated: #498, #495",
+  "state": "merged",
+  "created_at": "2026-03-10T08:15:32.456Z",
+  "updated_at": "2026-03-12T14:22:18.789Z",
+  "merged_by": {
+    "id": 4523,
+    "username": "jane_r",
+    "name": "Jane R",
+    "state": "active",
+    "locked": false,
+    "avatar_url": "https://example.com/avatars/jane.png",
+    "web_url": "https://example.com/jane_r"
+  },
+  "merged_at": "2026-03-12T14:22:18.789Z",
+  "closed_by": null,
+  "closed_at": null,
+  "target_branch": "main",
+  "source_branch": "fix/n-plus-one-approval",
+  "user_notes_count": 23,
+  "upvotes": 5,
+  "downvotes": 0,
+  "author": {
+    "id": 1001,
+    "username": "dev_tom",
+    "name": "Tom D",
+    "state": "active",
+    "locked": false,
+    "avatar_url": "https://example.com/avatars/tom.png",
+    "web_url": "https://example.com/dev_tom"
+  },
+  "assignees": [
+    {
+      "id": 1001,
+      "username": "dev_tom",
+      "name": "Tom D",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/tom.png",
+      "web_url": "https://example.com/dev_tom"
+    }
+  ],
+  "assignee": {
+    "id": 1001,
+    "username": "dev_tom",
+    "name": "Tom D",
+    "state": "active",
+    "locked": false,
+    "avatar_url": "https://example.com/avatars/tom.png",
+    "web_url": "https://example.com/dev_tom"
+  },
+  "reviewers": [
+    {
+      "id": 4523,
+      "username": "jane_r",
+      "name": "Jane R",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/jane.png",
+      "web_url": "https://example.com/jane_r"
+    },
+    {
+      "id": 7891,
+      "username": "bob_sr",
+      "name": "Bob S",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/bob.png",
+      "web_url": "https://example.com/bob_sr"
+    }
+  ],
+  "source_project_id": 99999,
+  "target_project_id": 99999,
+  "labels": ["bug", "database", "performance", "backend", "P1"],
+  "draft": false,
+  "work_in_progress": false,
+  "milestone": {
+    "id": 2890,
+    "iid": 98,
+    "project_id": 99999,
+    "title": "v3.2",
+    "description": "Sprint 3.2",
+    "state": "active",
+    "created_at": "2026-02-01T00:00:00.000Z",
+    "updated_at": "2026-03-01T00:00:00.000Z",
+    "due_date": "2026-03-22",
+    "start_date": "2026-02-22",
+    "expired": false,
+    "web_url": "https://example.com/milestones/98"
+  },
+  "merge_when_pipeline_succeeds": false,
+  "merge_status": "can_be_merged",
+  "detailed_merge_status": "mergeable",
+  "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "merge_commit_sha": "f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5",
+  "squash_commit_sha": null,
+  "discussion_locked": null,
+  "should_remove_source_branch": true,
+  "force_remove_source_branch": true,
+  "prepared_at": "2026-03-10T08:16:00.000Z",
+  "reference": "!101",
+  "references": {
+    "short": "!101",
+    "relative": "!101",
+    "full": "acme/project!101"
+  },
+  "web_url": "https://example.com/acme/project/-/merge_requests/101",
+  "time_stats": {
+    "time_estimate": 14400,
+    "total_time_spent": 7200,
+    "human_time_estimate": "4h",
+    "human_total_time_spent": "2h"
+  },
+  "squash": true,
+  "squash_on_merge": true,
+  "task_completion_status": {
+    "count": 5,
+    "completed_count": 4
+  },
+  "has_conflicts": false,
+  "blocking_discussions_resolved": true,
+  "approvals_before_merge": null,
+  "subscribed": true,
+  "changes_count": "8",
+  "latest_build_started_at": "2026-03-12T13:45:00.000Z",
+  "latest_build_finished_at": "2026-03-12T14:15:00.000Z",
+  "first_deployed_to_production_at": null,
+  "pipeline": {
+    "id": 1456789,
+    "iid": 98765,
+    "project_id": 99999,
+    "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    "ref": "fix/n-plus-one-approval",
+    "status": "success",
+    "source": "push",
+    "created_at": "2026-03-12T13:44:00.000Z",
+    "updated_at": "2026-03-12T14:15:00.000Z",
+    "web_url": "https://example.com/acme/project/-/pipelines/1456789"
+  },
+  "head_pipeline": {
+    "id": 1456789,
+    "iid": 98765,
+    "project_id": 99999,
+    "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    "ref": "fix/n-plus-one-approval",
+    "status": "success",
+    "source": "push",
+    "created_at": "2026-03-12T13:44:00.000Z",
+    "updated_at": "2026-03-12T14:15:00.000Z",
+    "web_url": "https://example.com/acme/project/-/pipelines/1456789"
+  },
+  "diff_refs": {
+    "base_sha": "000111222333",
+    "head_sha": "a1b2c3d4e5f6",
+    "start_sha": "444555666777"
+  },
+  "merge_error": null,
+  "first_contribution": false,
+  "user": {
+    "can_merge": true
+  },
+  "_links": {
+    "self": "https://example.com/api/v4/projects/99999/merge_requests/101",
+    "notes": "https://example.com/api/v4/projects/99999/merge_requests/101/notes",
+    "award_emoji": "https://example.com/api/v4/projects/99999/merge_requests/101/award_emoji",
+    "project": "https://example.com/api/v4/projects/99999"
+  }
+}

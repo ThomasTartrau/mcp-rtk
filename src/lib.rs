@@ -24,9 +24,11 @@
 //! * [`tracking`] — SQLite-backed token savings metrics.
 
 pub mod config;
+pub mod diff;
 pub mod discover;
 pub mod display;
 pub mod filter;
 pub mod install;
+pub mod preset_ops;
 pub mod proxy;
 pub mod tracking;

@@ -1,0 +1,355 @@
+[
+  {
+    "id": 380142,
+    "iid": 101,
+    "project_id": 99999,
+    "title": "fix: resolve N+1 query in approval check",
+    "description": "## What does this MR do?\n\nFixes an N+1 query that occurs when checking approvals.\n\n```sql\nSELECT * FROM approval_rules WHERE merge_request_id = $1;\nSELECT * FROM approvals WHERE approval_rule_id = $1;\n```\n\n### Checklist\n\n- [x] Tests added\n- [x] Migration reviewed\n- [ ] Feature flag\n- [x] Changelog entry\n\nCloses #500",
+    "state": "merged",
+    "created_at": "2026-03-10T08:15:32.456Z",
+    "updated_at": "2026-03-12T14:22:18.789Z",
+    "merged_by": {
+      "id": 4523,
+      "username": "jane_r",
+      "name": "Jane R",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/jane.png",
+      "web_url": "https://example.com/jane_r"
+    },
+    "merged_at": "2026-03-12T14:22:18.789Z",
+    "closed_by": null,
+    "closed_at": null,
+    "target_branch": "main",
+    "source_branch": "fix/n-plus-one-approval",
+    "user_notes_count": 23,
+    "upvotes": 5,
+    "downvotes": 0,
+    "author": {
+      "id": 1001,
+      "username": "dev_tom",
+      "name": "Tom D",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/tom.png",
+      "web_url": "https://example.com/dev_tom"
+    },
+    "assignees": [
+      {
+        "id": 1001,
+        "username": "dev_tom",
+        "name": "Tom D",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/tom.png",
+        "web_url": "https://example.com/dev_tom"
+      }
+    ],
+    "assignee": {
+      "id": 1001,
+      "username": "dev_tom",
+      "name": "Tom D",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/tom.png",
+      "web_url": "https://example.com/dev_tom"
+    },
+    "reviewers": [
+      {
+        "id": 4523,
+        "username": "jane_r",
+        "name": "Jane R",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/jane.png",
+        "web_url": "https://example.com/jane_r"
+      },
+      {
+        "id": 7891,
+        "username": "bob_sr",
+        "name": "Bob S",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/bob.png",
+        "web_url": "https://example.com/bob_sr"
+      }
+    ],
+    "source_project_id": 99999,
+    "target_project_id": 99999,
+    "labels": ["bug", "database", "performance", "backend", "P1"],
+    "draft": false,
+    "work_in_progress": false,
+    "milestone": {
+      "id": 2890,
+      "iid": 98,
+      "project_id": 99999,
+      "title": "v3.2",
+      "description": "Sprint 3.2",
+      "state": "active",
+      "created_at": "2026-02-01T00:00:00.000Z",
+      "updated_at": "2026-03-01T00:00:00.000Z",
+      "due_date": "2026-03-22",
+      "start_date": "2026-02-22",
+      "expired": false,
+      "web_url": "https://example.com/milestones/98"
+    },
+    "merge_when_pipeline_succeeds": false,
+    "merge_status": "can_be_merged",
+    "detailed_merge_status": "mergeable",
+    "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    "merge_commit_sha": "f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5",
+    "squash_commit_sha": null,
+    "discussion_locked": null,
+    "should_remove_source_branch": true,
+    "force_remove_source_branch": true,
+    "prepared_at": "2026-03-10T08:16:00.000Z",
+    "reference": "!101",
+    "references": {
+      "short": "!101",
+      "relative": "!101",
+      "full": "acme/project!101"
+    },
+    "web_url": "https://example.com/acme/project/-/merge_requests/101",
+    "time_stats": {
+      "time_estimate": 14400,
+      "total_time_spent": 7200,
+      "human_time_estimate": "4h",
+      "human_total_time_spent": "2h"
+    },
+    "squash": true,
+    "squash_on_merge": true,
+    "task_completion_status": {
+      "count": 4,
+      "completed_count": 3
+    },
+    "has_conflicts": false,
+    "blocking_discussions_resolved": true,
+    "approvals_before_merge": null,
+    "subscribed": true,
+    "changes_count": "8",
+    "latest_build_started_at": "2026-03-12T13:45:00.000Z",
+    "latest_build_finished_at": "2026-03-12T14:15:00.000Z",
+    "first_deployed_to_production_at": null,
+    "pipeline": {
+      "id": 1456789,
+      "iid": 98765,
+      "project_id": 99999,
+      "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "ref": "fix/n-plus-one-approval",
+      "status": "success",
+      "source": "push",
+      "created_at": "2026-03-12T13:44:00.000Z",
+      "updated_at": "2026-03-12T14:15:00.000Z",
+      "web_url": "https://example.com/acme/project/-/pipelines/1456789"
+    },
+    "head_pipeline": {
+      "id": 1456789,
+      "iid": 98765,
+      "project_id": 99999,
+      "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "ref": "fix/n-plus-one-approval",
+      "status": "success",
+      "source": "push",
+      "created_at": "2026-03-12T13:44:00.000Z",
+      "updated_at": "2026-03-12T14:15:00.000Z",
+      "web_url": "https://example.com/acme/project/-/pipelines/1456789"
+    },
+    "diff_refs": {
+      "base_sha": "000111222333",
+      "head_sha": "a1b2c3d4e5f6",
+      "start_sha": "444555666777"
+    },
+    "merge_error": null,
+    "first_contribution": false,
+    "user": {
+      "can_merge": true
+    },
+    "_links": {
+      "self": "https://example.com/api/v4/projects/99999/merge_requests/101",
+      "notes": "https://example.com/api/v4/projects/99999/merge_requests/101/notes",
+      "award_emoji": "https://example.com/api/v4/projects/99999/merge_requests/101/award_emoji",
+      "project": "https://example.com/api/v4/projects/99999"
+    }
+  },
+  {
+    "id": 380098,
+    "iid": 100,
+    "project_id": 99999,
+    "title": "feat: add OAuth2 PKCE support for mobile clients",
+    "description": "## Summary\n\nAdds PKCE support to OAuth2 flow for mobile and SPA clients.\n\n- Added `code_challenge` param to `/oauth/authorize`\n- Supports `S256` and `plain` methods\n- Backwards compatible\n- Rate limiting on token exchange\n\n### Testing\n\n- 47 new unit tests\n- Integration tests\n\nRelated: #400, #401",
+    "state": "merged",
+    "created_at": "2026-03-08T16:30:00.000Z",
+    "updated_at": "2026-03-11T11:00:00.000Z",
+    "merged_by": {
+      "id": 7891,
+      "username": "bob_sr",
+      "name": "Bob S",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/bob.png",
+      "web_url": "https://example.com/bob_sr"
+    },
+    "merged_at": "2026-03-11T11:00:00.000Z",
+    "closed_by": null,
+    "closed_at": null,
+    "target_branch": "main",
+    "source_branch": "feat/oauth2-pkce",
+    "user_notes_count": 45,
+    "upvotes": 12,
+    "downvotes": 0,
+    "author": {
+      "id": 5678,
+      "username": "alice_c",
+      "name": "Alice C",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/alice.png",
+      "web_url": "https://example.com/alice_c"
+    },
+    "assignees": [
+      {
+        "id": 5678,
+        "username": "alice_c",
+        "name": "Alice C",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/alice.png",
+        "web_url": "https://example.com/alice_c"
+      },
+      {
+        "id": 9012,
+        "username": "dave_b",
+        "name": "Dave K",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/dave.png",
+        "web_url": "https://example.com/dave_b"
+      }
+    ],
+    "assignee": {
+      "id": 5678,
+      "username": "alice_c",
+      "name": "Alice C",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://example.com/avatars/alice.png",
+      "web_url": "https://example.com/alice_c"
+    },
+    "reviewers": [
+      {
+        "id": 7891,
+        "username": "bob_sr",
+        "name": "Bob S",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/bob.png",
+        "web_url": "https://example.com/bob_sr"
+      },
+      {
+        "id": 3456,
+        "username": "maria_s",
+        "name": "Maria S",
+        "state": "active",
+        "locked": false,
+        "avatar_url": "https://example.com/avatars/maria.png",
+        "web_url": "https://example.com/maria_s"
+      }
+    ],
+    "source_project_id": 99999,
+    "target_project_id": 99999,
+    "labels": ["feature", "security", "oauth", "backend", "mobile"],
+    "draft": false,
+    "work_in_progress": false,
+    "milestone": {
+      "id": 2890,
+      "iid": 98,
+      "project_id": 99999,
+      "title": "v3.2",
+      "description": "Sprint 3.2",
+      "state": "active",
+      "created_at": "2026-02-01T00:00:00.000Z",
+      "updated_at": "2026-03-01T00:00:00.000Z",
+      "due_date": "2026-03-22",
+      "start_date": "2026-02-22",
+      "expired": false,
+      "web_url": "https://example.com/milestones/98"
+    },
+    "merge_when_pipeline_succeeds": true,
+    "merge_status": "can_be_merged",
+    "detailed_merge_status": "mergeable",
+    "sha": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+    "merge_commit_sha": "e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4",
+    "squash_commit_sha": "c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2",
+    "discussion_locked": null,
+    "should_remove_source_branch": true,
+    "force_remove_source_branch": false,
+    "prepared_at": "2026-03-08T16:31:00.000Z",
+    "reference": "!100",
+    "references": {
+      "short": "!100",
+      "relative": "!100",
+      "full": "acme/project!100"
+    },
+    "web_url": "https://example.com/acme/project/-/merge_requests/100",
+    "time_stats": {
+      "time_estimate": 86400,
+      "total_time_spent": 57600,
+      "human_time_estimate": "3d",
+      "human_total_time_spent": "2d"
+    },
+    "squash": true,
+    "squash_on_merge": true,
+    "task_completion_status": {
+      "count": 6,
+      "completed_count": 6
+    },
+    "has_conflicts": false,
+    "blocking_discussions_resolved": true,
+    "approvals_before_merge": 2,
+    "subscribed": true,
+    "changes_count": "23",
+    "latest_build_started_at": "2026-03-11T09:00:00.000Z",
+    "latest_build_finished_at": "2026-03-11T10:45:00.000Z",
+    "first_deployed_to_production_at": null,
+    "pipeline": {
+      "id": 1456700,
+      "iid": 98700,
+      "project_id": 99999,
+      "sha": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+      "ref": "feat/oauth2-pkce",
+      "status": "success",
+      "source": "push",
+      "created_at": "2026-03-11T09:00:00.000Z",
+      "updated_at": "2026-03-11T10:45:00.000Z",
+      "web_url": "https://example.com/acme/project/-/pipelines/1456700"
+    },
+    "head_pipeline": {
+      "id": 1456700,
+      "iid": 98700,
+      "project_id": 99999,
+      "sha": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+      "ref": "feat/oauth2-pkce",
+      "status": "success",
+      "source": "push",
+      "created_at": "2026-03-11T09:00:00.000Z",
+      "updated_at": "2026-03-11T10:45:00.000Z",
+      "web_url": "https://example.com/acme/project/-/pipelines/1456700"
+    },
+    "diff_refs": {
+      "base_sha": "aaa111bbb222",
+      "head_sha": "b2c3d4e5f6a1",
+      "start_sha": "ccc333ddd444"
+    },
+    "merge_error": null,
+    "first_contribution": false,
+    "user": {
+      "can_merge": true
+    },
+    "_links": {
+      "self": "https://example.com/api/v4/projects/99999/merge_requests/100",
+      "notes": "https://example.com/api/v4/projects/99999/merge_requests/100/notes",
+      "award_emoji": "https://example.com/api/v4/projects/99999/merge_requests/100/award_emoji",
+      "project": "https://example.com/api/v4/projects/99999"
+    }
+  }
+]

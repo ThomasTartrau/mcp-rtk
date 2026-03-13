@@ -21,6 +21,7 @@
 
 [Quick start](#quick-start) •
 [Presets](#presets) •
+[Commands](#commands) •
 [Configuration](#configuration) •
 [Contributing presets](#contributing-a-preset)
 
@@ -237,13 +238,35 @@ mcp-rtk discover            # last 30 days
 mcp-rtk discover --days 7   # last week
 ```
 
+### `mcp-rtk install`
+
+Automatically wrap MCP servers in a config file with mcp-rtk. Scans for stdio servers and rewrites their command/args.
+
+```bash
+mcp-rtk install .mcp.json                    # wrap all stdio servers
+mcp-rtk install .mcp.json --server gitlab    # wrap only the "gitlab" server
+```
+
+### `mcp-rtk uninstall`
+
+Remove mcp-rtk wrapping from MCP servers in a config file.
+
+```bash
+mcp-rtk uninstall .mcp.json                    # unwrap all servers
+mcp-rtk uninstall .mcp.json --server gitlab    # unwrap only "gitlab"
+```
+
 ### `mcp-rtk presets`
 
-Browse the built-in presets without digging through source code.
+Browse, create, and fetch presets.
 
 ```bash
 mcp-rtk presets list          # show all available presets
 mcp-rtk presets show gitlab   # print the full TOML for a preset
+mcp-rtk presets init          # interactive preset scaffolding
+mcp-rtk presets init -o my.toml
+mcp-rtk presets pull https://example.com/preset.toml   # fetch a community preset
+mcp-rtk presets pull https://example.com/preset.toml -o custom.toml
 ```
 
 ### `mcp-rtk validate-preset`
@@ -261,6 +284,15 @@ Test filters on JSON from stdin without running a proxy. Stats go to stderr, fil
 ```bash
 echo '{"id":1,"title":"test","avatar_url":"...","_links":{}}' | mcp-rtk dry-run --preset gitlab --tool list_issues
 cat response.json | mcp-rtk dry-run --config custom.toml --tool get_merge_request
+```
+
+### `mcp-rtk diff`
+
+Show a colored side-by-side diff between raw and filtered JSON. Reads from stdin.
+
+```bash
+cat response.json | mcp-rtk diff --preset gitlab --tool list_merge_requests
+cat response.json | mcp-rtk diff --config custom.toml --tool get_merge_request
 ```
 
 ## Safety
