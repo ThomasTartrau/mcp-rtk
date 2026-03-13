@@ -7,22 +7,6 @@ use anyhow::{Context, Result};
 
 use crate::display::*;
 
-/// Default directory for user-downloaded presets.
-fn user_presets_dir() -> Result<PathBuf> {
-    let dir = dirs_path()?.join("presets");
-    std::fs::create_dir_all(&dir)
-        .context(format!("Failed to create presets dir: {}", dir.display()))?;
-    Ok(dir)
-}
-
-fn dirs_path() -> Result<PathBuf> {
-    let home = std::env::var("HOME").context("HOME not set")?;
-    Ok(PathBuf::from(home)
-        .join(".local")
-        .join("share")
-        .join("mcp-rtk"))
-}
-
 // ── Preset Init ──────────────────────────────────────────────────────
 
 /// Run the interactive preset scaffolding.
@@ -234,7 +218,7 @@ pub fn run_preset_pull(url: &str, output: Option<&str>) -> Result<()> {
         PathBuf::from(p)
     } else {
         let filename = url_to_filename(url);
-        let dir = user_presets_dir()?;
+        let dir = crate::config::external_presets_dir()?;
         dir.join(filename)
     };
 

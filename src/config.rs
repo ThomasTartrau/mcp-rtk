@@ -13,7 +13,7 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Generic default filter rules (no tool-specific entries).
 static DEFAULT_FILTERS: &str = include_str!("../config/default.toml");
@@ -154,10 +154,62 @@ fn default_db_path() -> String {
 }
 
 /// Preset filter rules (no upstream section — just `[tools.*]`).
+///
+/// External presets can include an optional `[meta]` section with detection
+/// keywords for auto-discovery:
+///
+/// ```toml
+/// [meta]
+/// keywords = ["github-mcp", "github"]
+///
+/// [tools.list_repos]
+/// keep_fields = ["id", "name", "full_name"]
+/// ```
 #[derive(Debug, Clone, Deserialize)]
 pub struct PresetConfig {
+    /// Optional metadata for auto-detection (used by external presets).
+    #[serde(default)]
+    pub meta: Option<PresetMeta>,
     #[serde(default)]
     pub tools: HashMap<String, ToolFilterRules>,
+}
+
+/// Metadata for an external preset, enabling auto-detection from the upstream
+/// command.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct PresetMeta {
+    /// Keywords that trigger this preset when found in the upstream command.
+    #[serde(default)]
+    pub keywords: Vec<String>,
+}
+
+/// An external preset loaded from the filesystem at runtime.
+#[derive(Debug, Clone)]
+pub struct ExternalPreset {
+    /// Preset name (derived from the filename without `.toml`).
+    pub name: String,
+    /// Keywords for auto-detection (from `[meta]`).
+    pub keywords: Vec<String>,
+    /// The parsed preset configuration.
+    pub config: PresetConfig,
+    /// Path to the source TOML file.
+    pub path: PathBuf,
+}
+
+/// Return the directory for external (user/community) presets.
+///
+/// Defaults to `~/.local/share/mcp-rtk/presets/`. The directory is created
+/// if it does not exist.
+pub fn external_presets_dir() -> Result<PathBuf> {
+    let home = std::env::var("HOME").context("HOME not set")?;
+    let dir = PathBuf::from(home)
+        .join(".local")
+        .join("share")
+        .join("mcp-rtk")
+        .join("presets");
+    std::fs::create_dir_all(&dir)
+        .context(format!("Failed to create presets dir: {}", dir.display()))?;
+    Ok(dir)
 }
 
 /// User-supplied configuration file. All sections are optional.
@@ -214,7 +266,8 @@ impl Config {
     ///
     /// This is the primary entry point. The upstream command is taken from
     /// `upstream_args` (e.g. `["npx", "@nicepkg/gitlab-mcp"]`). A preset is
-    /// auto-detected from the command, and an optional user config file
+    /// auto-detected from the command (including external presets from
+    /// `~/.local/share/mcp-rtk/presets/`), and an optional user config file
     /// provides overrides.
     ///
     /// # Errors
@@ -222,6 +275,7 @@ impl Config {
     /// Returns an error if the user config file cannot be read or parsed.
     pub fn from_upstream(upstream_args: &[&str], config_path: Option<&Path>) -> Result<Self> {
         let defaults = Self::load_defaults()?;
+        let externals = Self::load_external_presets();
 
         // Build upstream from args
         let mut upstream = if let Some((cmd, args)) = upstream_args.split_first() {
@@ -242,16 +296,16 @@ impl Config {
             None
         };
 
-        // Determine preset: user explicit > auto-detect from command
+        // Determine preset: user explicit > auto-detect (embedded + external)
         let preset_name = user_config
             .as_ref()
             .and_then(|u| u.preset.clone())
-            .or_else(|| Self::detect_preset(upstream_args));
+            .or_else(|| Self::detect_preset_all(upstream_args, &externals));
 
         // Layer: defaults → preset → user config
         let mut filters = defaults;
         if let Some(ref name) = preset_name {
-            if let Some(preset) = Self::load_preset(name) {
+            if let Some(preset) = Self::load_preset_all(name, &externals) {
                 for (k, v) in preset.tools {
                     filters.tools.insert(k, v);
                 }
@@ -292,6 +346,35 @@ impl Config {
         })
     }
 
+    /// Build a complete config with optional preset override.
+    ///
+    /// Convenience wrapper around [`from_upstream`](Self::from_upstream) that
+    /// also applies a `--preset` override. Used by both initial startup and
+    /// hot reload to avoid duplicating the override logic.
+    pub fn build(
+        upstream_args: &[&str],
+        config_path: Option<&Path>,
+        preset_override: Option<&str>,
+    ) -> Result<Self> {
+        let mut config = Self::from_upstream(upstream_args, config_path)?;
+
+        if let Some(preset_name) = preset_override {
+            if let Some(preset_rules) = Self::load_preset_by_name(preset_name) {
+                for (k, v) in preset_rules {
+                    config.filters.tools.insert(k, v);
+                }
+                config.preset = Some(preset_name.to_string());
+            } else {
+                anyhow::bail!(
+                    "Unknown preset: {preset_name}\nAvailable: {}",
+                    Self::available_presets().join(", ")
+                );
+            }
+        }
+
+        Ok(config)
+    }
+
     /// Load configuration for the `gain` subcommand (no upstream needed).
     ///
     /// # Errors
@@ -327,9 +410,7 @@ impl Config {
         toml::from_str(DEFAULT_FILTERS).context("Failed to parse built-in defaults")
     }
 
-    /// Auto-detect a preset name from the upstream command args.
-    ///
-    /// Checks if any arg contains a known keyword (e.g. "gitlab-mcp" or "gitlab").
+    /// Auto-detect a preset name from the upstream command args (embedded only).
     fn detect_preset(args: &[&str]) -> Option<String> {
         let joined = args.join(" ").to_lowercase();
         for (name, keywords, _) in PRESETS {
@@ -342,12 +423,30 @@ impl Config {
         None
     }
 
-    /// Load a preset's tool rules by name.
+    /// Auto-detect a preset name from upstream args, checking both embedded
+    /// and external presets. Embedded presets take priority.
+    fn detect_preset_all(args: &[&str], externals: &[ExternalPreset]) -> Option<String> {
+        if let Some(name) = Self::detect_preset(args) {
+            return Some(name);
+        }
+        let joined = args.join(" ").to_lowercase();
+        for ext in externals {
+            for keyword in &ext.keywords {
+                if joined.contains(&keyword.to_lowercase()) {
+                    return Some(ext.name.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Load a preset's tool rules by name (embedded + external).
     ///
     /// Returns the tool-specific filter rules from the preset, or `None` if
     /// the preset name is unknown.
     pub fn load_preset_by_name(name: &str) -> Option<HashMap<String, ToolFilterRules>> {
-        Self::load_preset(name).map(|p| p.tools)
+        let externals = Self::load_external_presets();
+        Self::load_preset_all(name, &externals).map(|p| p.tools)
     }
 
     /// Load a preset by name from the embedded presets.
@@ -358,6 +457,83 @@ impl Config {
             }
         }
         None
+    }
+
+    /// Load a preset by name, checking both embedded and external presets.
+    /// Embedded presets take priority.
+    fn load_preset_all(name: &str, externals: &[ExternalPreset]) -> Option<PresetConfig> {
+        if let Some(preset) = Self::load_preset(name) {
+            return Some(preset);
+        }
+        externals
+            .iter()
+            .find(|e| e.name == name)
+            .map(|e| e.config.clone())
+    }
+
+    /// Scan `~/.local/share/mcp-rtk/presets/` for external preset TOML files.
+    ///
+    /// Each `.toml` file is parsed as a [`PresetConfig`]. The preset name is
+    /// derived from the filename (without extension). An optional `[meta]`
+    /// section provides detection keywords for auto-discovery.
+    ///
+    /// Invalid files are silently skipped.
+    pub fn load_external_presets() -> Vec<ExternalPreset> {
+        let dir = match external_presets_dir() {
+            Ok(d) => d,
+            Err(_) => return vec![],
+        };
+
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => return vec![],
+        };
+
+        let mut presets = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension() != Some(std::ffi::OsStr::new("toml")) {
+                continue;
+            }
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let config = match toml::from_str::<PresetConfig>(&content) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("Skipping invalid preset {}: {e}", path.display());
+                    continue;
+                }
+            };
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let keywords = config
+                .meta
+                .as_ref()
+                .map(|m| m.keywords.clone())
+                .unwrap_or_default();
+            presets.push(ExternalPreset {
+                name,
+                keywords,
+                config,
+                path,
+            });
+        }
+
+        if !presets.is_empty() {
+            let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
+            tracing::debug!(
+                "Loaded {} external preset(s): {}",
+                presets.len(),
+                names.join(", ")
+            );
+        }
+
+        presets
     }
 
     /// Resolve env vars: values starting with `$` are read from the process env.
@@ -415,21 +591,32 @@ impl Config {
         MergedRules::merge(defaults, None)
     }
 
-    /// List all available preset names.
-    pub fn available_presets() -> Vec<&'static str> {
-        PRESETS.iter().map(|(name, _, _)| *name).collect()
+    /// List all available preset names (embedded + external).
+    pub fn available_presets() -> Vec<String> {
+        let mut names: Vec<String> = PRESETS
+            .iter()
+            .map(|(name, _, _)| name.to_string())
+            .collect();
+        for ext in Self::load_external_presets() {
+            if !names.iter().any(|n| n == &ext.name) {
+                names.push(ext.name);
+            }
+        }
+        names
     }
 }
 
-/// Print a table of all available presets.
+/// Print a table of all available presets (embedded + external).
 pub fn list_presets() {
     use crate::display::*;
 
     println!();
     println!("  {BOLD}{GREEN}MCP-RTK{RESET}{DIM} — Available Presets{RESET}");
     println!("  {DIM}{}{RESET}", "─".repeat(56));
-    println!();
 
+    // Embedded presets
+    println!();
+    println!("  {DIM}Built-in:{RESET}");
     for (name, keywords, toml_content) in PRESETS {
         let tool_count = toml_content.matches("[tools.").count();
         println!(
@@ -440,33 +627,69 @@ pub fn list_presets() {
         );
     }
 
+    // External presets
+    let externals = Config::load_external_presets();
+    if !externals.is_empty() {
+        println!();
+        println!("  {DIM}External (~/.local/share/mcp-rtk/presets/):{RESET}");
+        for ext in &externals {
+            let tool_count = ext.config.tools.len();
+            let kw = if ext.keywords.is_empty() {
+                "manual only".to_string()
+            } else {
+                ext.keywords.join(", ")
+            };
+            println!(
+                "  {BOLD}{WHITE}{:<12}{RESET}  {DIM}detected from:{RESET} {YELLOW}{}{RESET}  {DIM}({} tools){RESET}",
+                ext.name, kw, tool_count,
+            );
+        }
+    }
+
     println!();
     println!("  {DIM}Use `mcp-rtk presets show <name>` to see the full TOML.{RESET}");
+    if externals.is_empty() {
+        println!("  {DIM}Drop .toml presets in ~/.local/share/mcp-rtk/presets/ for auto-discovery.{RESET}");
+    }
     println!();
 }
 
-/// Print the full TOML content of a named preset.
+/// Print the full TOML content of a named preset (embedded or external).
 pub fn show_preset(name: &str) -> Result<()> {
     use crate::display::*;
 
+    // Check embedded presets
     for (preset_name, keywords, toml_content) in PRESETS {
         if *preset_name == name {
             println!();
             println!("  {BOLD}{GREEN}{}{RESET}{DIM} preset{RESET}", name);
             println!("  {DIM}Auto-detected from: {}{RESET}", keywords.join(", "));
             println!();
-            // Print TOML content with light syntax highlighting
-            for line in toml_content.lines() {
-                if line.starts_with('#') {
-                    println!("  {DIM}{line}{RESET}");
-                } else if line.starts_with("[tools.") {
-                    println!("  {BOLD}{CYAN}{line}{RESET}");
-                } else if line.is_empty() {
-                    println!();
-                } else {
-                    println!("  {line}");
-                }
-            }
+            print_toml_highlighted(toml_content);
+            println!();
+            return Ok(());
+        }
+    }
+
+    // Check external presets
+    for ext in Config::load_external_presets() {
+        if ext.name == name {
+            let content = std::fs::read_to_string(&ext.path)
+                .context(format!("Failed to read {}", ext.path.display()))?;
+            let kw = if ext.keywords.is_empty() {
+                "none (use --preset to select)".to_string()
+            } else {
+                ext.keywords.join(", ")
+            };
+            println!();
+            println!(
+                "  {BOLD}{GREEN}{}{RESET}{DIM} preset (external){RESET}",
+                name
+            );
+            println!("  {DIM}Auto-detected from: {kw}{RESET}");
+            println!("  {DIM}Path: {}{RESET}", ext.path.display());
+            println!();
+            print_toml_highlighted(&content);
             println!();
             return Ok(());
         }
@@ -474,12 +697,24 @@ pub fn show_preset(name: &str) -> Result<()> {
 
     anyhow::bail!(
         "Unknown preset: {name}\nAvailable: {}",
-        PRESETS
-            .iter()
-            .map(|(n, _, _)| *n)
-            .collect::<Vec<_>>()
-            .join(", ")
+        Config::available_presets().join(", ")
     );
+}
+
+fn print_toml_highlighted(content: &str) {
+    use crate::display::*;
+
+    for line in content.lines() {
+        if line.starts_with('#') {
+            println!("  {DIM}{line}{RESET}");
+        } else if line.starts_with("[tools.") || line.starts_with("[meta]") {
+            println!("  {BOLD}{CYAN}{line}{RESET}");
+        } else if line.is_empty() {
+            println!();
+        } else {
+            println!("  {line}");
+        }
+    }
 }
 
 /// Merge two sets of tool filter rules (user on top of base).
@@ -760,7 +995,7 @@ mod tests {
     #[test]
     fn available_presets_includes_gitlab() {
         let presets = Config::available_presets();
-        assert!(presets.contains(&"gitlab"));
+        assert!(presets.iter().any(|p| p == "gitlab"));
     }
 
     #[test]
@@ -833,5 +1068,143 @@ mod tests {
 
         let rules = config.get_tool_rules("list_special");
         assert_eq!(rules.keep_fields, vec!["special_field"]);
+    }
+
+    #[test]
+    fn load_external_presets_from_dir() {
+        let temp = std::env::temp_dir().join("mcp-rtk-test-ext-presets");
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).unwrap();
+
+        // Write an external preset with meta
+        std::fs::write(
+            temp.join("github.toml"),
+            r#"
+[meta]
+keywords = ["github-mcp", "github"]
+
+[tools.list_repos]
+keep_fields = ["id", "name", "full_name"]
+max_array_items = 20
+"#,
+        )
+        .unwrap();
+
+        // Write one without meta
+        std::fs::write(
+            temp.join("jira.toml"),
+            r#"
+[tools.list_issues]
+keep_fields = ["key", "summary"]
+"#,
+        )
+        .unwrap();
+
+        // Write an invalid file (should be skipped)
+        std::fs::write(temp.join("bad.toml"), "not valid {{{{").unwrap();
+
+        // Write a non-toml file (should be skipped)
+        std::fs::write(temp.join("readme.txt"), "ignore me").unwrap();
+
+        // Manually scan the temp dir
+        let entries = std::fs::read_dir(&temp).unwrap();
+        let mut presets = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension() != Some(std::ffi::OsStr::new("toml")) {
+                continue;
+            }
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let config = match toml::from_str::<super::PresetConfig>(&content) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let keywords = config
+                .meta
+                .as_ref()
+                .map(|m| m.keywords.clone())
+                .unwrap_or_default();
+            presets.push(super::ExternalPreset {
+                name,
+                keywords,
+                config,
+                path,
+            });
+        }
+
+        // Should find github and jira, not bad.toml or readme.txt
+        assert_eq!(presets.len(), 2);
+        let github = presets.iter().find(|p| p.name == "github").unwrap();
+        assert_eq!(github.keywords, vec!["github-mcp", "github"]);
+        assert!(github.config.tools.contains_key("list_repos"));
+
+        let jira = presets.iter().find(|p| p.name == "jira").unwrap();
+        assert!(jira.keywords.is_empty());
+        assert!(jira.config.tools.contains_key("list_issues"));
+
+        let _ = std::fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn detect_preset_all_finds_external() {
+        let externals = vec![super::ExternalPreset {
+            name: "github".to_string(),
+            keywords: vec!["github-mcp".to_string(), "github".to_string()],
+            config: super::PresetConfig {
+                meta: None,
+                tools: HashMap::new(),
+            },
+            path: std::path::PathBuf::from("/tmp/github.toml"),
+        }];
+
+        // Embedded takes priority
+        assert_eq!(
+            Config::detect_preset_all(&["npx", "gitlab-mcp"], &externals),
+            Some("gitlab".to_string())
+        );
+        // External is found
+        assert_eq!(
+            Config::detect_preset_all(&["npx", "github-mcp"], &externals),
+            Some("github".to_string())
+        );
+        // No match
+        assert_eq!(
+            Config::detect_preset_all(&["node", "custom-server"], &externals),
+            None
+        );
+    }
+
+    #[test]
+    fn preset_config_parses_with_meta() {
+        let toml_str = r#"
+[meta]
+keywords = ["test-mcp", "test"]
+
+[tools.list_items]
+keep_fields = ["id", "name"]
+"#;
+        let config: super::PresetConfig = toml::from_str(toml_str).unwrap();
+        let meta = config.meta.unwrap();
+        assert_eq!(meta.keywords, vec!["test-mcp", "test"]);
+        assert!(config.tools.contains_key("list_items"));
+    }
+
+    #[test]
+    fn preset_config_parses_without_meta() {
+        let toml_str = r#"
+[tools.list_items]
+keep_fields = ["id", "name"]
+"#;
+        let config: super::PresetConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.meta.is_none());
+        assert!(config.tools.contains_key("list_items"));
     }
 }
