@@ -70,6 +70,8 @@ proptest:
 
 doc-tests:
   stage: test
+  before_script:
+    - rm -rf target/debug/examples target/debug/incremental
   script:
     - cargo test --doc
   needs:
