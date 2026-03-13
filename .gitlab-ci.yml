@@ -104,12 +104,16 @@ bench-mr:
     - export PATH="${CARGO_HOME}/bin:$PATH"
   script:
     - |
+      HASH_FLAG=""
+      if [ -n "$CI_MERGE_REQUEST_TARGET_BRANCH_SHA" ]; then
+        HASH_FLAG="--start-point-hash $CI_MERGE_REQUEST_TARGET_BRANCH_SHA"
+      fi
       bencher run \
       --project mcp-rtk \
       --token "$BENCHER_API_TOKEN" \
       --branch "$CI_COMMIT_REF_NAME" \
       --start-point "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" \
-      --start-point-hash "$CI_MERGE_REQUEST_TARGET_BRANCH_SHA" \
+      $HASH_FLAG \
       --start-point-clone-thresholds \
       --start-point-reset \
       --testbed ci \
