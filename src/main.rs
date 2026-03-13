@@ -85,6 +85,18 @@ enum Commands {
         #[command(subcommand)]
         action: PresetsAction,
     },
+    /// Show a colored diff between raw and filtered JSON (reads from stdin).
+    Diff {
+        /// Preset to use.
+        #[arg(long)]
+        preset: Option<String>,
+        /// Path to config file.
+        #[arg(short, long)]
+        config: Option<String>,
+        /// Tool name to simulate.
+        #[arg(long)]
+        tool: String,
+    },
     /// Wrap MCP servers in a config file with mcp-rtk.
     Install {
         /// Path to the MCP JSON config file (.mcp.json or claude_desktop_config.json).
@@ -111,6 +123,20 @@ enum PresetsAction {
     Show {
         /// Preset name (e.g. "gitlab", "grafana").
         name: String,
+    },
+    /// Interactively create a new preset TOML file.
+    Init {
+        /// Output file path (defaults to <name>.toml in current dir).
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Fetch a community preset from a URL.
+    Pull {
+        /// URL to a .toml preset file.
+        url: String,
+        /// Output file path (defaults to ~/.local/share/mcp-rtk/presets/<name>.toml).
+        #[arg(short, long)]
+        output: Option<String>,
     },
 }
 
@@ -189,6 +215,7 @@ async fn main() -> Result<()> {
 
             let mut input = String::new();
             std::io::stdin()
+                .take(11 * 1024 * 1024)
                 .read_to_string(&mut input)
                 .context("Failed to read from stdin")?;
 
@@ -237,10 +264,66 @@ async fn main() -> Result<()> {
 
             return Ok(());
         }
+        Some(Commands::Diff {
+            preset,
+            config: diff_config,
+            tool,
+        }) => {
+            use mcp_rtk::filter::FilterEngine;
+            use std::io::Read;
+
+            let config_path = diff_config.as_deref().map(std::path::Path::new);
+            let fake_upstream: Vec<&str> = if let Some(ref p) = preset {
+                vec!["dry-run", p]
+            } else {
+                vec!["dry-run"]
+            };
+
+            let mut config = Config::from_upstream(&fake_upstream, config_path)?;
+
+            if let Some(ref preset_name) = preset {
+                if config.preset.is_none() {
+                    if let Some(preset_rules) = Config::load_preset_by_name(preset_name) {
+                        for (k, v) in preset_rules {
+                            config.filters.tools.insert(k, v);
+                        }
+                        config.preset = Some(preset_name.clone());
+                    } else {
+                        anyhow::bail!(
+                            "Unknown preset: {preset_name}\nAvailable: {}",
+                            Config::available_presets().join(", ")
+                        );
+                    }
+                }
+            }
+
+            let engine = FilterEngine::new(Arc::new(config));
+
+            let mut input = String::new();
+            std::io::stdin()
+                .take(11 * 1024 * 1024)
+                .read_to_string(&mut input)
+                .context("Failed to read from stdin")?;
+
+            let input = input.trim();
+            if input.is_empty() {
+                anyhow::bail!("No input received on stdin. Pipe JSON into the command:\n  echo '{{\"key\": \"value\"}}' | mcp-rtk diff --tool <name>");
+            }
+
+            let filtered = engine.filter(tool, input);
+            mcp_rtk::diff::print_diff(input, &filtered, tool, preset.as_deref());
+            return Ok(());
+        }
         Some(Commands::Presets { action }) => {
             match action {
                 PresetsAction::List => mcp_rtk::config::list_presets(),
                 PresetsAction::Show { name } => mcp_rtk::config::show_preset(name)?,
+                PresetsAction::Init { output } => {
+                    mcp_rtk::preset_ops::run_preset_init(output.as_deref())?;
+                }
+                PresetsAction::Pull { url, output } => {
+                    mcp_rtk::preset_ops::run_preset_pull(url, output.as_deref())?;
+                }
             }
             return Ok(());
         }

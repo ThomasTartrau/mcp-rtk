@@ -155,9 +155,9 @@ fn default_db_path() -> String {
 
 /// Preset filter rules (no upstream section — just `[tools.*]`).
 #[derive(Debug, Clone, Deserialize)]
-pub(crate) struct PresetConfig {
+pub struct PresetConfig {
     #[serde(default)]
-    pub(crate) tools: HashMap<String, ToolFilterRules>,
+    pub tools: HashMap<String, ToolFilterRules>,
 }
 
 /// User-supplied configuration file. All sections are optional.
