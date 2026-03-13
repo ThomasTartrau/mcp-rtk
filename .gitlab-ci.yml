@@ -92,8 +92,6 @@ bench-main:
       --adapter rust_criterion \
       --err \
       cargo bench --bench filter_perf
-  needs:
-    - cargo-check
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
@@ -116,8 +114,6 @@ bench-mr:
       --adapter rust_criterion \
       --err \
       cargo bench --bench filter_perf
-  needs:
-    - cargo-check
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
