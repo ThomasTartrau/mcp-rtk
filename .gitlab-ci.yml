@@ -82,6 +82,7 @@ bench-main:
   image: rust:1.94.0
   before_script:
     - curl --proto '=https' --tlsv1.2 -sSfL https://bencher.dev/download/install-cli.sh | sh
+    - export PATH="${CARGO_HOME}/bin:$PATH"
   script:
     - |
       bencher run \
@@ -100,6 +101,7 @@ bench-mr:
   image: rust:1.94.0
   before_script:
     - curl --proto '=https' --tlsv1.2 -sSfL https://bencher.dev/download/install-cli.sh | sh
+    - export PATH="${CARGO_HOME}/bin:$PATH"
   script:
     - |
       bencher run \
