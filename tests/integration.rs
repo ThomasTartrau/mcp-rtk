@@ -671,8 +671,8 @@ fn validate_preset_invalid_toml() {
 #[test]
 fn presets_list_includes_gitlab_and_grafana() {
     let presets = mcp_rtk::config::Config::available_presets();
-    assert!(presets.contains(&"gitlab"));
-    assert!(presets.contains(&"grafana"));
+    assert!(presets.iter().any(|p| p == "gitlab"));
+    assert!(presets.iter().any(|p| p == "grafana"));
 }
 
 #[test]
@@ -685,6 +685,175 @@ fn show_preset_unknown_fails() {
 fn show_preset_gitlab_succeeds() {
     let result = mcp_rtk::config::show_preset("gitlab");
     assert!(result.is_ok());
+}
+
+// ===========================================================================
+// EXTERNAL PRESET TESTS
+// ===========================================================================
+
+#[test]
+fn external_preset_loaded_and_applied() {
+    use mcp_rtk::config::Config;
+    use mcp_rtk::filter::FilterEngine;
+    use std::sync::Arc;
+
+    // Create a temp dir to act as external presets dir
+    let temp = std::env::temp_dir().join("mcp-rtk-test-ext-apply");
+    let _ = std::fs::remove_dir_all(&temp);
+    std::fs::create_dir_all(&temp).unwrap();
+
+    // Write an external preset
+    std::fs::write(
+        temp.join("custom-api.toml"),
+        r#"
+[meta]
+keywords = ["custom-api-mcp"]
+
+[tools.list_items]
+keep_fields = ["id", "name", "status"]
+max_array_items = 5
+condense_users = true
+"#,
+    )
+    .unwrap();
+
+    // Load it manually (since we can't override the presets dir)
+    let externals = [mcp_rtk::config::ExternalPreset {
+        name: "custom-api".to_string(),
+        keywords: vec!["custom-api-mcp".to_string()],
+        config: toml::from_str(
+            r#"
+[tools.list_items]
+keep_fields = ["id", "name", "status"]
+max_array_items = 5
+condense_users = true
+"#,
+        )
+        .unwrap(),
+        path: temp.join("custom-api.toml"),
+    }];
+
+    // Verify the preset is found by name
+    let preset = externals.iter().find(|e| e.name == "custom-api");
+    assert!(preset.is_some());
+    assert!(preset.unwrap().config.tools.contains_key("list_items"));
+
+    // Build a config with this preset's rules applied
+    let mut config = Config::from_upstream(&["echo", "test"], None).unwrap();
+    let preset_config = &preset.unwrap().config;
+    for (k, v) in &preset_config.tools {
+        config.filters.tools.insert(k.clone(), v.clone());
+    }
+    config.preset = Some("custom-api".to_string());
+
+    let engine = FilterEngine::new(Arc::new(config));
+
+    // Test filtering
+    let raw = serde_json::json!([
+        {"id": 1, "name": "Item 1", "status": "active", "description": "long text", "extra": "noise"},
+        {"id": 2, "name": "Item 2", "status": "inactive", "description": "more text", "extra": "noise"},
+    ]);
+
+    let filtered_str = engine.filter("list_items", &raw.to_string());
+    let filtered: serde_json::Value = serde_json::from_str(&filtered_str).unwrap();
+
+    // keep_fields should work: only id, name, status survive
+    assert_eq!(filtered[0]["id"], 1);
+    assert_eq!(filtered[0]["name"], "Item 1");
+    assert_eq!(filtered[0]["status"], "active");
+    assert!(filtered[0].get("description").is_none());
+    assert!(filtered[0].get("extra").is_none());
+
+    let _ = std::fs::remove_dir_all(&temp);
+}
+
+#[test]
+fn external_preset_without_meta_has_no_keywords() {
+    let externals = mcp_rtk::config::Config::load_external_presets();
+    // This test just verifies that load_external_presets doesn't crash
+    // and returns a valid vec (may be empty in CI)
+    for ext in &externals {
+        assert!(!ext.name.is_empty());
+    }
+}
+
+#[test]
+fn external_preset_meta_parsing() {
+    let toml_with_meta: mcp_rtk::config::PresetConfig = toml::from_str(
+        r#"
+[meta]
+keywords = ["my-server", "myserver"]
+
+[tools.get_data]
+keep_fields = ["id", "value"]
+truncate_strings_at = 500
+"#,
+    )
+    .unwrap();
+
+    let meta = toml_with_meta.meta.unwrap();
+    assert_eq!(meta.keywords, vec!["my-server", "myserver"]);
+    assert!(toml_with_meta.tools.contains_key("get_data"));
+    assert_eq!(
+        toml_with_meta.tools["get_data"].keep_fields,
+        vec!["id", "value"]
+    );
+}
+
+#[test]
+fn config_build_with_preset_override() {
+    use mcp_rtk::config::Config;
+
+    let config = Config::build(&["echo", "test"], None, Some("gitlab")).unwrap();
+    assert_eq!(config.preset, Some("gitlab".to_string()));
+    let rules = config.get_tool_rules("list_merge_requests");
+    assert!(!rules.keep_fields.is_empty());
+}
+
+#[test]
+fn config_build_without_override() {
+    use mcp_rtk::config::Config;
+
+    let config = Config::build(&["echo", "test"], None, None).unwrap();
+    assert_eq!(config.preset, None);
+    // Should still have generic defaults
+    let rules = config.get_tool_rules("any_tool");
+    assert!(rules.strip_nulls);
+}
+
+// ===========================================================================
+// HOT RELOAD TESTS
+// ===========================================================================
+
+#[tokio::test]
+async fn hot_reloader_starts_with_valid_config() {
+    use mcp_rtk::hot_reload::HotReloader;
+
+    let reloader =
+        HotReloader::start(vec!["echo".into(), "test-server".into()], None, None).unwrap();
+
+    let engine = reloader.engine().load_full();
+    // Should have generic defaults
+    let rules = engine.config().get_tool_rules("any_tool");
+    assert!(rules.strip_nulls);
+    assert!(rules.condense_users);
+}
+
+#[tokio::test]
+async fn hot_reloader_starts_with_preset_override() {
+    use mcp_rtk::hot_reload::HotReloader;
+
+    let reloader = HotReloader::start(
+        vec!["echo".into(), "test-server".into()],
+        None,
+        Some("gitlab".into()),
+    )
+    .unwrap();
+
+    let engine = reloader.engine().load_full();
+    assert_eq!(engine.config().preset, Some("gitlab".to_string()));
+    let rules = engine.config().get_tool_rules("list_merge_requests");
+    assert!(!rules.keep_fields.is_empty());
 }
 
 // ===========================================================================

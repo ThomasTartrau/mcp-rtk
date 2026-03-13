@@ -65,7 +65,7 @@ pub fn run_discover(days: u32) -> Result<()> {
         .unwrap_or_default();
 
     // Build engines for each preset to simulate filtering
-    let available_presets: Vec<&str> = Config::available_presets();
+    let available_presets = Config::available_presets();
     let engines: HashMap<String, FilterEngine> = available_presets
         .iter()
         .filter_map(|name| {
@@ -487,14 +487,14 @@ fn measure_result_size(item: &Value) -> usize {
 fn detect_server_info(
     stats: &mut ServerStats,
     server_name: &str,
-    available_presets: &[&str],
+    available_presets: &[String],
     tracked_presets: &HashSet<String>,
 ) {
     for preset in available_presets {
-        if server_name.contains(preset) {
+        if server_name.contains(preset.as_str()) {
             stats.has_preset = true;
             stats.preset_name = Some(preset.to_string());
-            stats.already_proxied = tracked_presets.contains(*preset);
+            stats.already_proxied = tracked_presets.contains(preset);
             return;
         }
     }

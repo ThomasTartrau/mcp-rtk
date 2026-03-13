@@ -1,7 +1,5 @@
 //! Binary entry point for the mcp-rtk proxy.
 
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use rmcp::transport::{child_process::TokioChildProcess, io};
@@ -10,6 +8,7 @@ use tokio::process::Command;
 use tracing_subscriber::EnvFilter;
 
 use mcp_rtk::config::Config;
+use mcp_rtk::hot_reload::HotReloader;
 use mcp_rtk::proxy::{ProxyClient, ProxyServer};
 use mcp_rtk::tracking::Tracker;
 
@@ -182,34 +181,16 @@ async fn main() -> Result<()> {
             use mcp_rtk::display::*;
             use mcp_rtk::filter::FilterEngine;
             use std::io::Read;
+            use std::sync::Arc;
 
-            // Build config: if preset specified, use a fake upstream with that preset keyword
-            // If config specified, load from file
             let config_path = dry_config.as_deref().map(std::path::Path::new);
             let fake_upstream: Vec<&str> = if let Some(ref p) = preset {
-                vec!["dry-run", p] // preset keyword will be detected from args
+                vec!["dry-run", p]
             } else {
                 vec!["dry-run"]
             };
 
-            let mut config = Config::from_upstream(&fake_upstream, config_path)?;
-
-            // Override preset if explicitly specified (in case auto-detect didn't work)
-            if let Some(ref preset_name) = preset {
-                if config.preset.is_none() {
-                    if let Some(preset_rules) = Config::load_preset_by_name(preset_name) {
-                        for (k, v) in preset_rules {
-                            config.filters.tools.insert(k, v);
-                        }
-                        config.preset = Some(preset_name.clone());
-                    } else {
-                        anyhow::bail!(
-                            "Unknown preset: {preset_name}\nAvailable: {}",
-                            Config::available_presets().join(", ")
-                        );
-                    }
-                }
-            }
+            let config = Config::build(&fake_upstream, config_path, preset.as_deref())?;
 
             let engine = FilterEngine::new(Arc::new(config));
 
@@ -271,6 +252,7 @@ async fn main() -> Result<()> {
         }) => {
             use mcp_rtk::filter::FilterEngine;
             use std::io::Read;
+            use std::sync::Arc;
 
             let config_path = diff_config.as_deref().map(std::path::Path::new);
             let fake_upstream: Vec<&str> = if let Some(ref p) = preset {
@@ -279,23 +261,7 @@ async fn main() -> Result<()> {
                 vec!["dry-run"]
             };
 
-            let mut config = Config::from_upstream(&fake_upstream, config_path)?;
-
-            if let Some(ref preset_name) = preset {
-                if config.preset.is_none() {
-                    if let Some(preset_rules) = Config::load_preset_by_name(preset_name) {
-                        for (k, v) in preset_rules {
-                            config.filters.tools.insert(k, v);
-                        }
-                        config.preset = Some(preset_name.clone());
-                    } else {
-                        anyhow::bail!(
-                            "Unknown preset: {preset_name}\nAvailable: {}",
-                            Config::available_presets().join(", ")
-                        );
-                    }
-                }
-            }
+            let config = Config::build(&fake_upstream, config_path, preset.as_deref())?;
 
             let engine = FilterEngine::new(Arc::new(config));
 
@@ -351,28 +317,19 @@ async fn main() -> Result<()> {
         );
     }
 
-    let upstream_refs: Vec<&str> = cli.upstream.iter().map(|s| s.as_str()).collect();
-    let mut config = Config::from_upstream(
-        &upstream_refs,
-        cli.config.as_deref().map(std::path::Path::new),
+    // Start the hot-reloading filter engine. This builds the initial config
+    // (embedded + external presets) and watches the presets directory for
+    // changes — any .toml added/modified/removed triggers an atomic rebuild.
+    let reloader = HotReloader::start(
+        cli.upstream.clone(),
+        cli.config.as_ref().map(std::path::PathBuf::from),
+        cli.preset.clone(),
     )?;
+    let engine = reloader.engine().clone();
 
-    // Override preset if explicitly specified
-    if let Some(preset_name) = &cli.preset {
-        if let Some(preset) = Config::load_preset_by_name(preset_name) {
-            for (k, v) in preset {
-                config.filters.tools.insert(k, v);
-            }
-            config.preset = Some(preset_name.clone());
-        } else {
-            anyhow::bail!(
-                "Unknown preset: {preset_name}\nAvailable: {}",
-                Config::available_presets().join(", ")
-            );
-        }
-    }
-
-    let config = Arc::new(config);
+    // Read initial config for upstream spawn and tracking setup
+    let initial_engine = engine.load_full();
+    let config = initial_engine.config();
 
     if let Some(ref preset) = config.preset {
         tracing::info!("Using preset: {preset}");
@@ -382,7 +339,7 @@ async fn main() -> Result<()> {
 
     let tracker = if config.tracking.enabled {
         Tracker::new(&config.tracking.db_path)
-            .map(|t| Some(Arc::new(t)))
+            .map(|t| Some(std::sync::Arc::new(t)))
             .unwrap_or_else(|e| {
                 tracing::warn!("Failed to initialize tracker: {e}");
                 None
@@ -421,14 +378,17 @@ async fn main() -> Result<()> {
 
     // Now start stdio server — Claude Code's initialize request has been
     // buffered in the pipe and will be read immediately.
-    let proxy = ProxyServer::new(config.clone(), tracker, upstream_peer);
+    let proxy = ProxyServer::new(engine, tracker, upstream_peer);
     let stdio_transport = io::stdio();
     let server = proxy
         .serve(stdio_transport)
         .await
         .context("Failed to start proxy server on stdio")?;
 
-    tracing::info!("mcp-rtk proxy listening on stdio");
+    tracing::info!("mcp-rtk proxy listening on stdio (hot reload enabled)");
+
+    // Keep the reloader alive for the lifetime of the proxy
+    let _reloader = reloader;
 
     // Wait for either side to finish
     tokio::select! {

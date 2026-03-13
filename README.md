@@ -140,6 +140,45 @@ condense_users = true
 
 The full GitLab preset covers merge requests, pipelines, jobs, issues, commits, files, projects, members, labels, releases, and events.
 
+### External presets (auto-discovery)
+
+Drop any `.toml` preset file into `~/.local/share/mcp-rtk/presets/` and it will be auto-discovered at startup. No recompilation, no config change needed.
+
+```
+~/.local/share/mcp-rtk/presets/
+  github.toml
+  slack.toml
+  my-internal-api.toml
+```
+
+External presets use the same `[tools.*]` format as built-in presets. Add an optional `[meta]` section with detection keywords to enable auto-detection from the upstream command:
+
+```toml
+# ~/.local/share/mcp-rtk/presets/github.toml
+
+[meta]
+keywords = ["github-mcp", "github"]
+
+[tools.list_repos]
+keep_fields = ["id", "name", "full_name", "description", "html_url", "language"]
+max_array_items = 20
+
+[tools.get_issue]
+keep_fields = ["number", "title", "state", "body", "user", "labels", "assignees"]
+truncate_strings_at = 1500
+condense_users = true
+```
+
+Without `[meta]`, the preset can still be used with `--preset <name>` (where name = filename without `.toml`).
+
+External presets are fetched by `mcp-rtk presets pull` and scaffolded by `mcp-rtk presets init`, so the ecosystem grows without waiting for built-in releases.
+
+### Hot reload
+
+External presets are **hot-reloaded** while the proxy is running. When you add, edit, or remove a `.toml` file in `~/.local/share/mcp-rtk/presets/`, mcp-rtk detects the change and atomically rebuilds the filter engine within 500 ms. In-flight requests complete with the previous rules, while new requests use the updated ones. No restart needed.
+
+This makes it easy to iterate on filter rules: edit the preset, save, and the next tool call uses the new config.
+
 ### Creating your own preset
 
 If you use an MCP server that doesn't have a built-in preset, you can write your own as a TOML config:
@@ -169,6 +208,8 @@ Then pass it with `--config`:
 ```bash
 mcp-rtk --config ~/.config/mcp-rtk/my-server.toml -- your-mcp-server
 ```
+
+Or drop it as a preset in `~/.local/share/mcp-rtk/presets/` for auto-discovery (use `[tools.*]` format with an optional `[meta]` section instead of `[filters.*]`).
 
 ### Contributing a preset
 

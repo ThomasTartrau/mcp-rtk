@@ -15,9 +15,12 @@
 //!
 //! # Modules
 //!
-//! * [`config`] — TOML configuration loading with per-tool filter rules.
+//! * [`config`] — TOML configuration loading with per-tool filter rules and
+//!   external preset auto-discovery from `~/.local/share/mcp-rtk/presets/`.
 //! * [`filter`] — The 8-stage filter pipeline and generic JSON compression
 //!   functions.
+//! * [`hot_reload`] — File watcher that hot-reloads external presets and
+//!   atomically rebuilds the filter engine via [`arc_swap::ArcSwap`].
 //! * [`proxy`] — [`ProxyServer`](proxy::ProxyServer) and
 //!   [`ProxyClient`](proxy::ProxyClient) implementing the MCP server/client
 //!   handlers.
@@ -28,6 +31,7 @@ pub mod diff;
 pub mod discover;
 pub mod display;
 pub mod filter;
+pub mod hot_reload;
 pub mod install;
 pub mod preset_ops;
 pub mod proxy;

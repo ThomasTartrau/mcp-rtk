@@ -20,13 +20,13 @@
 
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use rmcp::handler::client::ClientHandler;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::*;
 use rmcp::service::{Peer, RequestContext, RoleClient, RoleServer};
 use rmcp::Error as McpError;
 
-use crate::config::Config;
 use crate::filter::FilterEngine;
 use crate::tracking::Tracker;
 
@@ -36,28 +36,30 @@ use crate::tracking::Tracker;
 /// [`FilterEngine`] pipeline before returning results to Claude, while
 /// `list_tools` responses are forwarded as-is.
 ///
-/// The upstream peer must be connected before creating the proxy server.
+/// The filter engine is held behind an [`ArcSwap`] so it can be atomically
+/// replaced at runtime when external presets change on disk (hot reload).
 ///
 /// # Examples
 ///
 /// ```no_run
 /// # use std::sync::Arc;
+/// # use arc_swap::ArcSwap;
 /// # use mcp_rtk::config::Config;
+/// # use mcp_rtk::filter::FilterEngine;
 /// # use mcp_rtk::proxy::ProxyServer;
 /// # use rmcp::service::{Peer, RoleClient};
 /// let config = Arc::new(Config::from_upstream(&["npx", "some-mcp"], None).unwrap());
-/// // let proxy = ProxyServer::new(config, None, upstream_peer);
+/// let engine = Arc::new(ArcSwap::from(Arc::new(FilterEngine::new(config))));
+/// // let proxy = ProxyServer::new(engine, None, upstream_peer);
 /// ```
 #[derive(Clone)]
 pub struct ProxyServer {
     /// Handle to the upstream MCP server.
     upstream: Peer<RoleClient>,
-    /// The filter engine that compresses tool responses.
-    filter: Arc<FilterEngine>,
+    /// The filter engine, atomically swappable for hot reload.
+    filter: Arc<ArcSwap<FilterEngine>>,
     /// Optional token-savings tracker (SQLite-backed).
     tracker: Option<Arc<Tracker>>,
-    /// Name of the detected/selected preset (e.g. "gitlab").
-    preset: Arc<String>,
     /// Peer handle for the downstream (Claude) connection.
     peer: Option<Peer<RoleServer>>,
 }
@@ -67,23 +69,18 @@ impl ProxyServer {
     ///
     /// # Arguments
     ///
-    /// * `config` — Shared configuration (filter rules, upstream settings).
+    /// * `engine` — The shared, hot-reloadable filter engine.
     /// * `tracker` — Optional [`Tracker`] for recording token savings.
     /// * `upstream` — Peer handle to the upstream MCP server.
     pub fn new(
-        config: Arc<Config>,
+        engine: Arc<ArcSwap<FilterEngine>>,
         tracker: Option<Arc<Tracker>>,
         upstream: Peer<RoleClient>,
     ) -> Self {
-        let preset = config
-            .preset
-            .clone()
-            .unwrap_or_else(|| "generic".to_string());
         Self {
             upstream,
-            filter: Arc::new(FilterEngine::new(config)),
+            filter: engine,
             tracker,
-            preset: Arc::new(preset),
             peer: None,
         }
     }
@@ -136,9 +133,16 @@ impl ServerHandler for ProxyServer {
         request: CallToolRequestParam,
         _context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<CallToolResult, McpError>> + Send + '_ {
-        let filter = self.filter.clone();
+        // Load the current engine snapshot (lock-free, zero-copy on the hot path).
+        // If a hot reload swaps the engine mid-flight, this request finishes
+        // with the snapshot it started with.
+        let filter = self.filter.load_full();
         let tracker = self.tracker.clone();
-        let preset = self.preset.clone();
+        let preset = filter
+            .config()
+            .preset
+            .clone()
+            .unwrap_or_else(|| "generic".to_string());
         let tool_name = request.name.to_string();
         let upstream = self.upstream.clone();
 
