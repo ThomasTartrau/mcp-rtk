@@ -27,5 +27,6 @@ pub mod config;
 pub mod discover;
 pub mod display;
 pub mod filter;
+pub mod install;
 pub mod proxy;
 pub mod tracking;

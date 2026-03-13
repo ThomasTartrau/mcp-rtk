@@ -85,6 +85,22 @@ enum Commands {
         #[command(subcommand)]
         action: PresetsAction,
     },
+    /// Wrap MCP servers in a config file with mcp-rtk.
+    Install {
+        /// Path to the MCP JSON config file (.mcp.json or claude_desktop_config.json).
+        path: String,
+        /// Only wrap a specific server by name (wraps all stdio servers if omitted).
+        #[arg(long)]
+        server: Option<String>,
+    },
+    /// Remove mcp-rtk wrapping from MCP servers in a config file.
+    Uninstall {
+        /// Path to the MCP JSON config file (.mcp.json or claude_desktop_config.json).
+        path: String,
+        /// Only unwrap a specific server by name (unwraps all if omitted).
+        #[arg(long)]
+        server: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -226,6 +242,14 @@ async fn main() -> Result<()> {
                 PresetsAction::List => mcp_rtk::config::list_presets(),
                 PresetsAction::Show { name } => mcp_rtk::config::show_preset(name)?,
             }
+            return Ok(());
+        }
+        Some(Commands::Install { path, server }) => {
+            mcp_rtk::install::run_install(std::path::Path::new(path), server.as_deref())?;
+            return Ok(());
+        }
+        Some(Commands::Uninstall { path, server }) => {
+            mcp_rtk::install::run_uninstall(std::path::Path::new(path), server.as_deref())?;
             return Ok(());
         }
         None => {}
