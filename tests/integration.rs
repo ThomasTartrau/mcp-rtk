@@ -108,7 +108,7 @@ fn gitlab_get_merge_request() {
 
     // Description kept but truncated
     assert!(filtered.get("description").is_some());
-    assert!(filtered["description"].as_str().unwrap().len() < 600);
+    assert!(filtered["description"].as_str().unwrap().len() < 3100);
 
     // Users condensed
     assert_eq!(filtered["author"], "thomas");
@@ -118,7 +118,7 @@ fn gitlab_get_merge_request() {
     // Labels kept
     assert_eq!(filtered["labels"], json!(["feature", "backend"]));
 
-    assert_savings("get_merge_request", &raw_str, &filtered_str, 50.0);
+    assert_savings("get_merge_request", &raw_str, &filtered_str, 15.0);
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn gitlab_list_merge_request_notes() {
     let filtered: Value = serde_json::from_str(&filtered_str).unwrap();
 
     // Body truncated
-    assert!(filtered[0]["body"].as_str().unwrap().len() < 900);
+    assert!(filtered[0]["body"].as_str().unwrap().len() < 1600);
     // Author condensed
     assert_eq!(filtered[0]["author"], "alice");
     // system field kept
@@ -168,7 +168,7 @@ fn gitlab_list_merge_request_notes() {
     assert!(filtered[0].get("noteable_type").is_none());
     assert!(filtered[0].get("position").is_none());
 
-    assert_savings("list_merge_request_notes", &raw_str, &filtered_str, 40.0);
+    assert_savings("list_merge_request_notes", &raw_str, &filtered_str, 30.0);
 }
 
 #[test]

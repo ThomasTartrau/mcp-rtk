@@ -243,9 +243,9 @@ mod tests {
         let config = Arc::new(test_config());
         let engine = FilterEngine::new(config);
 
-        let long_text = "x".repeat(5000);
+        let long_text = "x".repeat(10000);
         let result = engine.filter("get_job_log", &long_text);
-        assert!(result.len() < 5000);
+        assert!(result.len() < 10000);
         assert!(result.ends_with("...[truncated]"));
     }
 }

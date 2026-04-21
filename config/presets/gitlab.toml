@@ -6,18 +6,18 @@
 # --- Merge Requests ---
 
 [tools.list_merge_requests]
-keep_fields = ["iid", "title", "state", "author", "source_branch", "target_branch", "web_url", "created_at", "updated_at"]
+keep_fields = ["iid", "title", "state", "author", "source_branch", "target_branch", "web_url", "labels", "draft", "assignees", "reviewers", "merge_status", "created_at", "updated_at"]
 max_array_items = 20
 condense_users = true
 
 [tools.get_merge_request]
-keep_fields = ["iid", "title", "state", "author", "source_branch", "target_branch", "web_url", "description", "labels", "assignees", "reviewers", "created_at", "updated_at", "merge_status"]
-truncate_strings_at = 500
+keep_fields = ["iid", "title", "state", "author", "source_branch", "target_branch", "web_url", "description", "labels", "assignees", "reviewers", "created_at", "updated_at", "merge_status", "detailed_merge_status", "draft", "milestone", "pipeline", "has_conflicts", "blocking_discussions_resolved", "merged_by", "merged_at", "changes_count", "sha"]
+truncate_strings_at = 3000
 condense_users = true
 
 [tools.list_merge_request_notes]
 keep_fields = ["author", "body", "created_at", "system", "type"]
-truncate_strings_at = 800
+truncate_strings_at = 1500
 condense_users = true
 max_array_items = 30
 
@@ -34,18 +34,18 @@ max_array_items = 50
 [tools.get_merge_request_note]
 keep_fields = ["id", "body", "author", "created_at", "system", "type", "resolved", "position"]
 condense_users = true
-truncate_strings_at = 800
+truncate_strings_at = 1500
 
 [tools.get_merge_request_notes]
 keep_fields = ["id", "body", "author", "created_at", "system", "type", "resolved"]
 condense_users = true
-truncate_strings_at = 800
+truncate_strings_at = 1500
 max_array_items = 30
 
 [tools.mr_discussions]
 keep_fields = ["items", "id", "individual_note", "notes", "body", "author", "created_at", "system", "resolved", "type"]
 condense_users = true
-truncate_strings_at = 800
+truncate_strings_at = 1500
 max_array_items = 30
 strip_fields = ["pagination", "noteable_id", "noteable_type", "project_id", "noteable_iid", "confidential", "internal", "imported", "imported_from", "commands_changes", "attachment", "resolvable"]
 
@@ -63,29 +63,29 @@ keep_fields = ["id", "name", "status", "stage", "ref", "created_at", "duration",
 max_array_items = 20
 
 [tools.get_job_log]
-truncate_strings_at = 3000
+truncate_strings_at = 8000
 
 # --- Issues ---
 
 [tools.list_issues]
-keep_fields = ["iid", "title", "state", "author", "labels", "assignees", "created_at", "updated_at", "web_url"]
+keep_fields = ["iid", "title", "state", "author", "labels", "assignees", "milestone", "due_date", "weight", "created_at", "updated_at", "web_url"]
 max_array_items = 20
 condense_users = true
 
 [tools.get_issue]
-keep_fields = ["iid", "title", "state", "author", "description", "labels", "assignees", "milestone", "created_at", "updated_at", "web_url"]
-truncate_strings_at = 500
+keep_fields = ["iid", "title", "state", "author", "description", "labels", "assignees", "milestone", "due_date", "weight", "severity", "confidential", "closed_at", "created_at", "updated_at", "web_url"]
+truncate_strings_at = 3000
 condense_users = true
 
 [tools.my_issues]
-keep_fields = ["iid", "title", "state", "author", "labels", "assignees", "project_id", "created_at", "web_url"]
+keep_fields = ["iid", "title", "state", "author", "labels", "assignees", "project_id", "due_date", "weight", "created_at", "web_url"]
 condense_users = true
 max_array_items = 20
 
 [tools.list_issue_discussions]
 keep_fields = ["items", "id", "individual_note", "notes", "body", "author", "created_at", "system", "resolved", "type"]
 condense_users = true
-truncate_strings_at = 800
+truncate_strings_at = 1500
 max_array_items = 30
 strip_fields = ["pagination", "noteable_id", "noteable_type", "project_id", "noteable_iid", "confidential", "internal", "imported", "imported_from", "commands_changes", "attachment", "resolvable"]
 
@@ -115,7 +115,7 @@ max_array_items = 50
 
 [tools.get_file_contents]
 keep_fields = ["file_name", "file_path", "size", "content", "ref", "name", "path", "type"]
-truncate_strings_at = 5000
+truncate_strings_at = 10000
 
 [tools.get_repository_tree]
 keep_fields = ["name", "type", "path"]
