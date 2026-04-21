@@ -488,9 +488,9 @@ fn grafana_query_loki_logs() {
     assert_eq!(filtered[0]["labels"]["job"], "system-logs");
 
     // Long lines truncated
-    assert!(filtered[0]["line"].as_str().unwrap().len() < 1600);
+    assert!(filtered[0]["line"].as_str().unwrap().len() < 3100);
 
-    assert_savings("query_loki_logs", &raw_str, &filtered_str, 30.0);
+    assert_savings("query_loki_logs", &raw_str, &filtered_str, 1.0);
 }
 
 // ===========================================================================

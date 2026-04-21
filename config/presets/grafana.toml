@@ -17,21 +17,21 @@ max_array_items = 30
 # --- Datasources ---
 
 [tools.list_datasources]
-keep_fields = ["uid", "name", "type", "isDefault"]
+keep_fields = ["uid", "name", "type", "url", "isDefault", "database"]
 max_array_items = 30
 
 [tools.get_datasource_by_uid]
-keep_fields = ["uid", "name", "type", "url", "isDefault"]
+keep_fields = ["uid", "name", "type", "url", "isDefault", "database"]
 strip_fields = ["secureJsonFields", "typeLogoUrl", "jsonData", "access", "orgId", "version"]
 
 [tools.get_datasource_by_name]
-keep_fields = ["uid", "name", "type", "url", "isDefault"]
+keep_fields = ["uid", "name", "type", "url", "isDefault", "database"]
 strip_fields = ["secureJsonFields", "typeLogoUrl", "jsonData", "access", "orgId", "version"]
 
 # --- Dashboards ---
 
 [tools.get_dashboard_by_uid]
-strip_fields = ["meta", "annotations", "id", "version", "schemaVersion", "graphTooltip", "fiscalYearStartMonth", "liveNow", "weekStart", "iteration"]
+strip_fields = ["meta", "annotations", "id", "version", "schemaVersion", "graphTooltip", "fiscalYearStartMonth", "liveNow", "weekStart", "iteration", "gridPos", "transparent", "repeatDirection", "libraryPanel"]
 truncate_strings_at = 2000
 max_array_items = 50
 
@@ -41,7 +41,7 @@ max_array_items = 50
 
 [tools.get_dashboard_panel_queries]
 max_array_items = 30
-truncate_strings_at = 1500
+truncate_strings_at = 2000
 
 # --- Prometheus ---
 
@@ -62,5 +62,5 @@ max_array_items = 100
 
 [tools.query_loki_logs]
 strip_fields = ["filename"]
-truncate_strings_at = 1500
+truncate_strings_at = 3000
 max_array_items = 50
