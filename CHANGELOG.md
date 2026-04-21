@@ -1,3 +1,9 @@
+## [1.5.1](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.5.0...v1.5.1) (2026-04-21)
+
+### Bug Fixes
+
+* add SQLite busy timeout and WAL mode for concurrent tracking ([cf39c89](https://gitlab.com/ThomasTartrau/mcp-rtk/commit/cf39c89b8357003d0c9fc69f88b277ea88fa2151))
+
 ## [1.5.0](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.4.0...v1.5.0) (2026-04-21)
 
 ### Features
