@@ -22,6 +22,7 @@ use anyhow::{Context, Result};
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use crate::display::*;
 
@@ -58,6 +59,8 @@ impl Tracker {
                 .context("Failed to create tracking database directory")?;
         }
         let conn = Connection::open(&expanded).context("Failed to open tracking database")?;
+        conn.busy_timeout(Duration::from_secs(5))?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS tool_calls (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
