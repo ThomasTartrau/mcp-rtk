@@ -158,6 +158,8 @@ semantic-release:
     - build-release
   variables:
     CARGO_REGISTRY_TOKEN: ${CRATES_IO_TOKEN}
+    GIT_DEPTH: 0
+    GIT_STRATEGY: clone
   before_script:
     - apt-get update -qq && apt-get install -y -qq curl build-essential
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --no-modify-path
@@ -175,6 +177,8 @@ semantic-release:
   script:
     - export PATH="${CARGO_HOME}/bin:$PATH"
     - git remote set-url origin "https://gitlab-ci-token:${GITLAB_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git"
+    - git checkout main
+    - git pull origin main
     - semantic-release
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
