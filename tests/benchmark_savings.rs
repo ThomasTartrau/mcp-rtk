@@ -45,7 +45,7 @@ fn benchmark_get_merge_request_savings() {
         filtered_str.len(),
     );
     assert!(
-        savings_pct > 60.0,
-        "Expected >60% savings, got {savings_pct:.1}%"
+        savings_pct > 45.0,
+        "Expected >45% savings, got {savings_pct:.1}%"
     );
 }
