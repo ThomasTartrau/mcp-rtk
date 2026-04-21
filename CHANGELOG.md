@@ -1,3 +1,10 @@
+## [1.5.0](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.4.0...v1.5.0) (2026-04-21)
+
+### Features
+
+* preserve critical context fields in gitlab preset ([df645a2](https://gitlab.com/ThomasTartrau/mcp-rtk/commit/df645a21c50c0def3dfe32fb4f8ded64fe428dcf))
+* tune grafana preset for better context preservation ([0257ef4](https://gitlab.com/ThomasTartrau/mcp-rtk/commit/0257ef4532a9979c3c0afd2551c7b16087a3212d))
+
 ## [1.4.0](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.3.0...v1.4.0) (2026-03-13)
 
 ### Features
