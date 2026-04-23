@@ -122,13 +122,13 @@ pub fn keep_fields(value: &mut Value, fields: &[String]) {
     }
 }
 
-/// Condense user objects to bare username strings.
+/// Condense user objects to compact `{id, username}` objects.
 ///
 /// Detects user-like objects by the presence of a `"username"` field and
 /// replaces common user keys (`author`, `assignee`, `merged_by`, etc.) with
-/// just the username string. Arrays of users (`assignees`, `reviewers`,
-/// `participants`) become arrays of username strings. Non-user entries in
-/// arrays are preserved as-is.
+/// a compact object containing only `id` and `username`. Arrays of users
+/// (`assignees`, `reviewers`, `participants`) become arrays of compact
+/// objects. Non-user entries in arrays are preserved as-is.
 ///
 /// # Examples
 ///
@@ -137,7 +137,7 @@ pub fn keep_fields(value: &mut Value, fields: &[String]) {
 /// # use mcp_rtk::filter::json::condense_user_objects;
 /// let mut v = json!({"author": {"id": 1, "username": "john", "avatar_url": "..."}});
 /// condense_user_objects(&mut v);
-/// assert_eq!(v, json!({"author": "john"}));
+/// assert_eq!(v, json!({"author": {"id": 1, "username": "john"}}));
 /// ```
 pub fn condense_user_objects(value: &mut Value) {
     condense_user_objects_inner(value, 0);
@@ -152,27 +152,21 @@ fn condense_user_objects_inner(value: &mut Value, depth: usize) {
             let user_keys = ["author", "assignee", "merged_by", "closed_by", "user"];
             for key in &user_keys {
                 if let Some(user_val) = map.get_mut(*key) {
-                    if let Some(username) = extract_username(user_val) {
-                        *user_val = Value::String(username);
+                    if let Some(compact) = extract_user_compact(user_val) {
+                        *user_val = compact;
                     }
                 }
             }
-            // Handle arrays of users (assignees, reviewers)
             let user_array_keys = ["assignees", "reviewers", "participants"];
             for key in &user_array_keys {
                 if let Some(Value::Array(arr)) = map.get(*key) {
-                    let usernames: Vec<Value> = arr
+                    let compacted: Vec<Value> = arr
                         .iter()
-                        .map(|v| {
-                            extract_username(v)
-                                .map(Value::String)
-                                .unwrap_or_else(|| v.clone())
-                        })
+                        .map(|v| extract_user_compact(v).unwrap_or_else(|| v.clone()))
                         .collect();
-                    map.insert(key.to_string(), Value::Array(usernames));
+                    map.insert(key.to_string(), Value::Array(compacted));
                 }
             }
-            // Recurse
             for v in map.values_mut() {
                 condense_user_objects_inner(v, depth + 1);
             }
@@ -186,13 +180,15 @@ fn condense_user_objects_inner(value: &mut Value, depth: usize) {
     }
 }
 
-fn extract_username(value: &Value) -> Option<String> {
+fn extract_user_compact(value: &Value) -> Option<Value> {
     if let Value::Object(map) = value {
-        if map.contains_key("username") {
-            return map
-                .get("username")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+        if let Some(username) = map.get("username").and_then(|v| v.as_str()) {
+            let mut compact = serde_json::Map::new();
+            if let Some(id) = map.get("id") {
+                compact.insert("id".to_string(), id.clone());
+            }
+            compact.insert("username".to_string(), Value::String(username.to_string()));
+            return Some(Value::Object(compact));
         }
     }
     None
@@ -425,7 +421,10 @@ mod tests {
             ]
         });
         condense_user_objects(&mut v);
-        assert_eq!(v, json!({"author": "john", "assignees": ["jane"]}));
+        assert_eq!(
+            v,
+            json!({"author": {"id": 1, "username": "john"}, "assignees": [{"id": 2, "username": "jane"}]})
+        );
     }
 
     #[test]

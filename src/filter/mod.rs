@@ -230,8 +230,8 @@ mod tests {
         assert!(parsed[0].get("iid").is_some());
         assert!(parsed[0].get("title").is_some());
         assert!(parsed[0].get("state").is_some());
-        // Author should be condensed
-        assert_eq!(parsed[0]["author"], json!("john"));
+        // Author should be condensed to {id, username}
+        assert_eq!(parsed[0]["author"], json!({"id": 1, "username": "john"}));
         // Should NOT contain stripped/non-whitelisted fields
         assert!(parsed[0].get("description").is_none());
         assert!(parsed[0].get("_links").is_none());
