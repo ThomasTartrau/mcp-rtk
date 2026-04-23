@@ -1,3 +1,9 @@
+## [1.6.0](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.5.1...v1.6.0) (2026-04-23)
+
+### Features
+
+* preserve numeric user IDs in condensed user objects ([a32b1f7](https://gitlab.com/ThomasTartrau/mcp-rtk/commit/a32b1f73772e9aad89bf9ca57fe3a99a81ac25cf))
+
 ## [1.5.1](https://gitlab.com/ThomasTartrau/mcp-rtk/compare/v1.5.0...v1.5.1) (2026-04-21)
 
 ### Bug Fixes
