@@ -59,8 +59,11 @@ fn gitlab_list_merge_requests() {
     assert_eq!(filtered[0]["state"], "opened");
     assert_eq!(filtered[0]["source_branch"], "fix-login");
 
-    // Author condensed to username
-    assert_eq!(filtered[0]["author"], "thomas");
+    // Author condensed to {id, username}
+    assert_eq!(
+        filtered[0]["author"],
+        json!({"id": 42, "username": "thomas"})
+    );
 
     // Verbose fields removed
     assert!(filtered[0].get("id").is_none());
@@ -110,10 +113,16 @@ fn gitlab_get_merge_request() {
     assert!(filtered.get("description").is_some());
     assert!(filtered["description"].as_str().unwrap().len() < 3100);
 
-    // Users condensed
-    assert_eq!(filtered["author"], "thomas");
-    assert_eq!(filtered["assignees"], json!(["alice", "bob"]));
-    assert_eq!(filtered["reviewers"], json!(["charlie"]));
+    // Users condensed to {id, username}
+    assert_eq!(filtered["author"], json!({"id": 42, "username": "thomas"}));
+    assert_eq!(
+        filtered["assignees"],
+        json!([{"id": 42, "username": "alice"}, {"id": 42, "username": "bob"}])
+    );
+    assert_eq!(
+        filtered["reviewers"],
+        json!([{"id": 42, "username": "charlie"}])
+    );
 
     // Labels kept
     assert_eq!(filtered["labels"], json!(["feature", "backend"]));
@@ -159,8 +168,11 @@ fn gitlab_list_merge_request_notes() {
 
     // Body truncated
     assert!(filtered[0]["body"].as_str().unwrap().len() < 1600);
-    // Author condensed
-    assert_eq!(filtered[0]["author"], "alice");
+    // Author condensed to {id, username}
+    assert_eq!(
+        filtered[0]["author"],
+        json!({"id": 42, "username": "alice"})
+    );
     // system field kept
     assert_eq!(filtered[1]["system"], true);
     // Verbose fields removed
@@ -205,7 +217,10 @@ fn gitlab_list_issues() {
 
     assert_eq!(filtered[0]["iid"], 10);
     assert_eq!(filtered[0]["title"], "Bug: login fails");
-    assert_eq!(filtered[0]["author"], "thomas");
+    assert_eq!(
+        filtered[0]["author"],
+        json!({"id": 42, "username": "thomas"})
+    );
     assert!(filtered[0].get("id").is_none());
     assert!(filtered[0].get("description").is_none());
 
@@ -892,7 +907,7 @@ fn dry_run_filters_json() {
     // Fields kept
     assert_eq!(parsed[0]["iid"], 10);
     assert_eq!(parsed[0]["title"], "Test issue");
-    assert_eq!(parsed[0]["author"], "thomas");
+    assert_eq!(parsed[0]["author"], json!({"id": 1, "username": "thomas"}));
 
     // Fields removed
     assert!(parsed[0].get("id").is_none());
